@@ -37,9 +37,6 @@ export class GameManager {
         this.wsUrl = wsUrl;
         this.socketManager = new SocketManager();
         this.roomId = null;
-
-        this.socketManager.connect("ws://localhost:8080/ws");
-        this.listen_server_for_messages();
     }
 
     ///////////////////////////////////////
@@ -47,14 +44,20 @@ export class GameManager {
     // This method sends a message to the server to create a new game
     ///////////////////////////////////////
 
-    public new_game_request_handler() {
-        console.log("Requesting new game...");
+    public async new_game_request_handler(username: string) {
 
+        if (!this.socketManager.isConnected) {
+            await this.socketManager.connect(this.wsUrl + "?username=" + encodeURIComponent(username));
+            this.listen_server_for_messages();
+        }
+        if (this.socketManager.isConnected) {
+            console.log("Requesting new game...");
 
-        this.socketManager.sendMessage({
-            type: "new_game",
-            socket_id: this.socketManager.socketId,
-        } as SocketClientMessageType);
+            this.socketManager.sendMessage({
+                type: "new_game",
+                socket_id: this.socketManager.socketId,
+            } as SocketClientMessageType);
+        }
     }
     ///////////////////////////////////////
     // Handle new game response

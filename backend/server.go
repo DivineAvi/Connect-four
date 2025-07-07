@@ -2,20 +2,21 @@ package main
 
 import (
 	"backend/db"
-	"backend/manager"
+	"backend/managers/server"
 	"os"
 
 	"github.com/joho/godotenv"
 )
 
 func main() {
-	///////////////////
+	///////////////////////////////////////////
 	// Load .env file & connect to the database
-	///////////////////
+	///////////////////////////////////////////
 	godotenv.Load()
 	db.Connect(os.Getenv("DATABASE_URL"))
 
-	manager.StartServer() // Initialize the client manager
+	var serverManager = server.GetServerManager()
+	serverManager.StartServer()
 
 	// Your server code here...
 }

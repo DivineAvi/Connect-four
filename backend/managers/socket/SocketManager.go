@@ -1,4 +1,4 @@
-package manager
+package socket
 
 import (
 	"github.com/gorilla/websocket"
@@ -9,17 +9,18 @@ type SocketManager struct {
 	// mu          sync.Mutex
 }
 
-var socketManagerInstance *SocketManager
+var socketManager *SocketManager
 
-// ///////////////////////////
+// ///////////////////////////////////////////////////////////////////////////////
 // GetSocketManager returns a singleton instance of SocketManager.
 // It initializes the instance only once using sync.Once to ensure thread safety.
-// ///////////////////////////
+// ///////////////////////////////////////////////////////////////////////////////
+
 func GetSocketManager() *SocketManager {
-	if socketManagerInstance == nil {
-		socketManagerInstance = &SocketManager{
+	if socketManager == nil {
+		socketManager = &SocketManager{
 			Connections: make(map[string]*websocket.Conn),
 		}
 	}
-	return socketManagerInstance
+	return socketManager
 }

@@ -15,15 +15,16 @@ export default function App() {
   }, []);
 
 
-  function handleNewGame() {
-    gameManager.new_game_request_handler();
+  async function handleNewGame() {
+    const username = (document.querySelector("input[name='username']") as HTMLInputElement)?.value;
+    await gameManager.new_game_request_handler(username);
   }
 
   return (
     <div className="w-full min-h-screen bg-black text-white flex items-center justify-center p-2">
       <div className="flex flex-col gap-4 w-96 border-2 border-white/9  p-5 rounded-xl">
         <label >Username</label>
-        <input type="text" className=" border-b-1 outline-none p-3 " placeholder="Enter username" />
+        <input name="username" type="text" className=" border-b-1 outline-none p-3 " placeholder="Enter username" />
         <div className={`${roomId ? 'grid-cols-2' : 'grid-cols-1'} grid gap-4 w-fit m-auto`}>
           <button onClick={handleNewGame} className="bg-white/4 hover:bg-white/10 p-3 rounded-xl transition-[background] duration-300 cursor-pointer min-w-[88.11px] ">{roomId ? 'New' : 'Play'}</button>
           <div className={`${roomId ? 'flex' : 'hidden'} items-center justify-center`}>

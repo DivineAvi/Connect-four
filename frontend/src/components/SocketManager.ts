@@ -11,20 +11,28 @@ export class SocketManager {
     ///////////////////
     public wsClient: WebSocket | null = null;
     public socketId: string | null = null;
-    
+    public isConnected: Boolean = false;
     ////////////////////////////////////////////
     // Connect to the WebSocket server
     // @param url - The WebSocket server URL
     ////////////////////////////////////////////
 
-    public connect(url: string): void {
+    public async connect(url: string): Promise<void> {
         console.log(`Connecting to WebSocket at ${url}`);
-        this.wsClient = new WebSocket(url);
-        this.wsClient.onopen = () => {
-            console.log("WebSocket connection established");
-        };
+        return new Promise((resolve, reject) => {
+            this.wsClient = new WebSocket(url);
+            this.wsClient.onerror = () => {
+                reject();
+            }
+            this.wsClient.onopen = () => {
+                this.isConnected = true
+                console.log("WebSocket connection established");
+                resolve();
+            };
+        })
+
     }
-    
+
     ////////////////////////////////////////////
     // Disconnect from the WebSocket server
     ////////////////////////////////////////////
@@ -38,7 +46,7 @@ export class SocketManager {
             console.error("No WebSocket connection to close");
         }
     }
-    
+
     ////////////////////////////////////////////
     // Send a message through the WebSocket
     // @param message - The message to send
