@@ -1,4 +1,4 @@
-package server
+package types
 
 type SocketClientMessageType struct {
 	Type     string         `json:"type"`

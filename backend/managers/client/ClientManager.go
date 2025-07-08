@@ -26,9 +26,8 @@ var (
 func GetClientManager() *ClientManager {
 	once.Do(func() {
 		clientManager = &ClientManager{
-			clients:      make(map[string]*websocket.Conn),
-			connToclient: make(map[*websocket.Conn]string),
-
+			connToclient:   make(map[*websocket.Conn]string),
+			clients:        make(map[string]*websocket.Conn),
 			playingClients: make(map[string]string),
 		}
 	})

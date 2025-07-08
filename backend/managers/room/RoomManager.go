@@ -1,9 +1,16 @@
 package room
 
 import (
+	"backend/managers/types"
+	"sync"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
+
+////////////////////////////////////
+//   STRUCTURE AND VARIABLES
+////////////////////////////////////
 
 type Room struct {
 	ID           string
@@ -11,7 +18,7 @@ type Room struct {
 	Players      map[string]*websocket.Conn // Maps player usernames to their presence in the room
 	CurrentTurn  string                     // Username of the player whose turn it is
 	GridData     [][]string                 // 2D slice representing the game board
-	Status       string
+	Status       string                     // waiting, playing, finished
 	Winner       string
 	Loser        string
 	Draw         bool
@@ -20,21 +27,32 @@ type Room struct {
 type RoomManager struct {
 	WaitingRooms map[string]*Room
 	PlayingRooms map[string]*Room
+	roomIdToRoom map[string]*Room
 }
 
 var roomManagerInstance *RoomManager = nil
+var PlayersNeeded int = 2
 
-// GetRoomManager returns a singleton instance of RoomManager.
-// It initializes the instance only once to ensure thread safety.
+var mu sync.Mutex
+
+// ////////////////////////////////////////////////
+// SINGLETON INSTACNE OF ROOM MANAGER
+// ////////////////////////////////////////////////
 func GetRoomManager() *RoomManager {
 	if roomManagerInstance == nil {
 		roomManagerInstance = &RoomManager{
 			WaitingRooms: make(map[string]*Room),
 			PlayingRooms: make(map[string]*Room),
+			roomIdToRoom: make(map[string]*Room),
 		}
 	}
 	return roomManagerInstance
 }
+
+//////////////////////////////////////////////
+// CREATE ROOM FUNCTION
+// CREATES A NEW ROOM AND RETURNS IT
+//////////////////////////////////////////////
 
 func CreateRoom(username string, conn *websocket.Conn) *Room {
 	RoomId := uuid.New().String()
@@ -50,6 +68,7 @@ func CreateRoom(username string, conn *websocket.Conn) *Room {
 		Draw:         false,
 	}
 	Room.Players[username] = conn
+	roomManagerInstance.roomIdToRoom[RoomId] = Room
 	for i := range Room.GridData {
 		Room.GridData[i] = make([]string, 7)
 		for j := range Room.GridData[i] {
@@ -58,4 +77,134 @@ func CreateRoom(username string, conn *websocket.Conn) *Room {
 	}
 
 	return Room
+}
+
+////////////////////////////////////////////////
+// ADDS A PLAYER TO THE ROOM
+////////////////////////////////////////////////
+
+func (r *Room) AddPlayer(username string, conn *websocket.Conn) {
+	mu.Lock()
+	defer mu.Unlock()
+	println("Adding player to room", username)
+	r.Players[username] = conn
+	r.TotalPlayers++
+	if r.TotalPlayers == PlayersNeeded {
+		r.ConverToPlaying()
+	}
+}
+
+/////////////////////////////////////////////////////
+//STARTS GAME AND INFORMS CLIENTS
+/////////////////////////////////////////////////////
+
+func (r *Room) StartGame() {
+	mu.Lock()
+	defer mu.Unlock()
+	println("Starting game for room", r.ID)
+
+	// Get player usernames for the response
+	playerNames := make([]string, 0, len(r.Players))
+	for username := range r.Players {
+		playerNames = append(playerNames, username)
+	}
+
+	// Notify all players that the game has started
+	for username, conn := range r.Players {
+		err := conn.WriteJSON(types.SocketServerMessageType{
+			Type: "game_started",
+			Data: map[string]interface{}{
+				"room_id":       r.ID,
+				"status":        r.Status,
+				"current_turn":  r.CurrentTurn,
+				"total_players": r.TotalPlayers,
+				"players":       playerNames,
+				"grid_data":     r.GridData,
+			},
+		})
+		if err != nil {
+			println("Error sending game started notification to", username, ":", err.Error())
+		}
+	}
+}
+
+/////////////////////////////////////////////////////
+//REMOVE PLAYER FROM ROOM FUNCTION
+/////////////////////////////////////////////////////
+
+func (r *Room) RemovePlayer(username string) {
+	mu.Lock()
+	defer mu.Unlock()
+	delete(r.Players, username)
+	r.TotalPlayers--
+	if r.TotalPlayers == 0 {
+		r.deleteRoom()
+	}
+
+}
+
+/////////////////////////////////////////////////////
+//PICK WINNER AFTER PLAYER MISSING FROM ROOM
+/////////////////////////////////////////////////////
+
+func (r *Room) PickWinner() {
+	println("Picking winner")
+	mu.Lock()
+	defer mu.Unlock()
+	if r.TotalPlayers == 1 {
+		for username := range r.Players {
+
+			r.Winner = username
+			println("Winner is", r.Winner)
+			break
+		}
+	}
+
+	r.deleteRoom()
+
+}
+
+////////////////////////////////////////////////////
+//DELETE ROOM FUNCTION
+//DELETES THE ROOM FROM THE WaitingRooms , PlayingRooms , roomIdToRoom
+////////////////////////////////////////////////////
+
+func (r *Room) deleteRoom() {
+
+	mu.Lock()
+	defer mu.Unlock()
+	if r.Status == "waiting" {
+		delete(roomManagerInstance.WaitingRooms, r.ID)
+	} else {
+
+		delete(roomManagerInstance.PlayingRooms, r.ID)
+	}
+	delete(roomManagerInstance.roomIdToRoom, r.ID)
+
+}
+
+////////////////////////////////////////////////////
+// GET ROOM BY ID FUNCTION
+// RETURNS THE ROOM BY ID
+////////////////////////////////////////////////////
+
+func GetRoomById(id string) *Room {
+	mu.Lock()
+	defer mu.Unlock()
+	return roomManagerInstance.roomIdToRoom[id]
+}
+
+////////////////////////////////////////////////////
+// CONVERT WAITING ROOM TO PLAYING ROOM
+////////////////////////////////////////////////////
+
+func (r *Room) ConverToPlaying() {
+	mu.Lock()
+	defer mu.Unlock()
+	println("Converting room to playing")
+	r.Status = "playing"
+	roomManagerInstance.PlayingRooms[r.ID] = r
+	delete(roomManagerInstance.WaitingRooms, r.ID)
+	println("Starting playing game")
+	r.StartGame()
 }

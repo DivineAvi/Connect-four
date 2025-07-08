@@ -4,6 +4,7 @@ import (
 	"backend/managers/client"
 	"backend/managers/room"
 	"backend/managers/socket"
+	"backend/managers/types"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -61,21 +62,10 @@ func (sm *ServerManager) StartServer() {
 			return
 		}
 
-		upgrader := websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
-		}
-
-		conn, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			http.Error(w, "Failed to upgrade connection", http.StatusInternalServerError)
-			return
-		}
-
+		conn, _ := sm.socketManager.Upgrade(w, r)
 		sm.clientManager.AddClient(username, conn)
-
-		handleSocket(sm, conn)
+		println("Client added for handleSocket tracking")
+		go handleSocket(sm, conn)
 
 	})
 
@@ -88,49 +78,95 @@ func (sm *ServerManager) StartServer() {
 
 func NewGameHandler(sm *ServerManager, conn *websocket.Conn, username string) {
 	log.Println("New game request received for ", username)
-	if _, exists := sm.clientManager.GetPlayingClient(username); exists {
-		conn.WriteJSON(SocketServerMessageType{
+
+	//////////////////////////////////////////////////////
+	//MATCHMAKING : CHECKING IF THE USER IS ALREADY IN A GAME
+	//////////////////////////////////////////////////////
+
+	if roomId, exists := sm.clientManager.GetPlayingClient(username); exists {
+		conn.WriteJSON(types.SocketServerMessageType{
 			Type: "info",
 			Data: map[string]any{
-				"error": "Previous game has been terminated",
+				"info": "Previous game has been terminated",
 			},
 		})
+		sm.clientManager.RemovePlayingClient(username)
+		r := room.GetRoomById(roomId)
+		r.PickWinner()
+	}
+	var r *room.Room
 
+	//////////////////////////////////////////////////////
+	//MATCHMAKING : SEARCHING FOR A ROOM IN WAITING ROOMS
+	//////////////////////////////////////////////////////
+
+	for roomId := range room.GetRoomManager().WaitingRooms {
+		r := room.GetRoomById(roomId)
+		r.AddPlayer(username, conn)
+		sm.clientManager.AddPlayingClient(username, r.ID)
+		r.ConverToPlaying()
 		return
 	}
-	room := room.CreateRoom(username, conn)
-	sm.roomManager.WaitingRooms[room.ID] = room
-	sm.clientManager.AddPlayingClient(username, room.ID)
 
-	conn.WriteJSON(SocketServerMessageType{
+	///////////////////////////////////////////////////////////////////////////
+	//MATCHMAKING :IF NOT FOUND IN WAITING ROOMS , CREATING A NEW ROOM AND WAIT
+	///////////////////////////////////////////////////////////////////////////
+
+	r = room.CreateRoom(username, conn)
+	sm.roomManager.WaitingRooms[r.ID] = r
+	sm.clientManager.AddPlayingClient(username, r.ID)
+
+	conn.WriteJSON(types.SocketServerMessageType{
 		Type: "new_game_response",
 		Data: map[string]any{
-			"room_id":       room.ID,
+			"room_id":       r.ID,
 			"status":        "waiting",
-			"current_turn":  room.CurrentTurn,
-			"total_players": room.TotalPlayers,
-			"players":       room.Players,
-			"grid_data":     room.GridData,
+			"current_turn":  r.CurrentTurn,
+			"total_players": r.TotalPlayers,
+			"players":       r.Players,
+			"grid_data":     r.GridData,
 		},
 	})
+
+	/////////////////////////////
+	// TIMER FOR BOT JOINING
+	/////////////////////////////
+	// go func() {
+	// 	time.Sleep(10 * time.Second)
+	// 	if r.Status == "playing" || r.TotalPlayers == room.PlayersNeeded {
+	// 		return
+	// 	}
+	// 	r.AddPlayer("opponent", conn)
+	// 	r.Status = "playing"
+	// 	r.CurrentTurn = "opponent"
+	// 	r.TotalPlayers = 2
+	// 	conn.WriteJSON(types.SocketServerMessageType{
+	// 		Type: "info_client_about_bot_joining",
+	// 		Data: map[string]any{
+	// 			"info": "Opponent bot has joined the game",
+	// 		},
+	// 	})
+	// }()
 
 }
 
 ////////////////////////////////////////////////
-// SOCKET HANDLER
+// SOCKET HANDLER , HANDLES ALL SOCKET MESSAGES
 ////////////////////////////////////////////////
 
 func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 	defer func() {
 		println("client disconnected")
 		sm.clientManager.RemoveClient("", conn)
-
 		conn.Close()
 	}()
 
 	for {
+
 		_, msg, err := conn.ReadMessage()
+
 		if err != nil {
+			println("error in read message", err)
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				fmt.Println("WebSocket closed normally:", err)
 			} else {
@@ -139,7 +175,7 @@ func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 			break
 		}
 		println("message received", string(msg))
-		var parsedMsg SocketClientMessageType
+		var parsedMsg types.SocketClientMessageType
 		if err := json.Unmarshal(msg, &parsedMsg); err != nil {
 			log.Println("JSON Unmarshal Error:", err)
 			continue
@@ -147,7 +183,8 @@ func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 
 		switch parsedMsg.Type {
 		case "new_game":
-			NewGameHandler(sm, conn, parsedMsg.Username)
+
+			go NewGameHandler(sm, conn, parsedMsg.Username)
 		default:
 			log.Println("Unknown message type:", parsedMsg.Type)
 		}
