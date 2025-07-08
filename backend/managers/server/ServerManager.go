@@ -13,6 +13,10 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+///////////////////////////////////////////////
+//STRUCTS AND VARIABLES DEFINATION
+//////////////////////////////////////////////
+
 type ServerManager struct {
 	clientManager *client.ClientManager
 	roomManager   *room.RoomManager
@@ -24,6 +28,10 @@ var (
 	once          sync.Once
 )
 
+//////////////////////////////////////////////
+//Singleton ServerManager
+//////////////////////////////////////////////
+
 func GetServerManager() *ServerManager {
 	once.Do(func() {
 		serverManager = &ServerManager{
@@ -34,6 +42,10 @@ func GetServerManager() *ServerManager {
 	})
 	return serverManager
 }
+
+/////////////////////////////////////////////
+// STARTS WEBSOCKET SERVER
+/////////////////////////////////////////////
 
 func (sm *ServerManager) StartServer() {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +82,10 @@ func (sm *ServerManager) StartServer() {
 	http.ListenAndServe(":8080", nil)
 }
 
+////////////////////////////////////////////////
+// SOCKET HANDLER
+////////////////////////////////////////////////
+
 func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 	defer func() {
 		sm.clientManager.RemoveClient("", conn)
@@ -81,7 +97,6 @@ func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 		if err != nil {
 			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
 				fmt.Println("WebSocket closed normally:", err)
-
 			} else {
 				fmt.Println("Read error:", err)
 			}

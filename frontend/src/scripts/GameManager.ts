@@ -3,27 +3,31 @@
 //  This file manages the game state and WebSocket connection.
 ///////////////////////////////////////////////////////////////
 
-import type { SocketClientMessageType, SocketServerMessageType } from "../types/SocketMessageTypes";
+import type { NewGameServerMessageType, SocketClientMessageType, SocketServerMessageType } from "../types/SocketMessageTypes";
 import { SocketManager } from "./SocketManager";
-
+import { PlayerManager } from "./PlayerManager";
+import type { ColorDiscFunctionType, DiscColorType, OpponentType, RoomIdType } from "../types/GameTypes";
 export class GameManager {
     ///////////////////////////////
     // Variables
     ///////////////////////////////
 
-    public roomId: string | null | undefined = null;
     public socketManager: SocketManager;
-    public wsUrl: string | null = null;
-    private static instance: GameManager | null = null;
-    public hasGameStarted: boolean = false;
+    public wsUrl: string | null 
+    private static instance: GameManager | null 
+    public hasGameStarted: boolean = false
+    public Player: PlayerManager | null = null
+    private ColorDiscFunction :ColorDiscFunctionType ;
+
+
 
     ///////////////////////////////////////
     // Singleton pattern to ensure only one instance of GameManager exists
     ///////////////////////////////////////
 
-    public static getInstance(wsUrl: string | null = null): GameManager {
+    public static getInstance(wsUrl: string | null = null , ColorDiscFunction : ColorDiscFunctionType) : GameManager {
         if (GameManager.instance === null) {
-            GameManager.instance = new GameManager(wsUrl);
+            GameManager.instance = new GameManager(wsUrl , ColorDiscFunction);
         }
         return GameManager.instance;
     }
@@ -33,11 +37,20 @@ export class GameManager {
     // @param wsUrl - The WebSocket server Url
     ///////////////////////////////////////
 
-    constructor(wsUrl: string | null = null) {
+    constructor(wsUrl: string | null = null , ColorDiscFunction : ColorDiscFunctionType) {
         this.wsUrl = wsUrl;
         this.socketManager = new SocketManager();
-        this.roomId = null;
+        this.ColorDiscFunction = ColorDiscFunction
     }
+
+    public SetUpPlayer(ColorDiscFunction: ColorDiscFunctionType, DiscColor: DiscColorType, Opponent: OpponentType, RoomId: RoomIdType) {
+        this.Player = new PlayerManager(ColorDiscFunction, DiscColor, Opponent, RoomId)
+    }
+
+    ///////////////////////////////////////
+    // Place Disc
+    ///////////////////////////////////////
+
 
     ///////////////////////////////////////
     // Create a new game
@@ -64,12 +77,13 @@ export class GameManager {
     // This method handles the response from the server when a new game is created
     ///////////////////////////////////////
 
-    public new_game_response_handler(message: SocketServerMessageType) {
-        this.roomId = message.room_id || null;
-        if (this.roomId) {
+    public new_game_response_handler(message: NewGameServerMessageType) {
+        if (message.success) {
+            console.log("Success!!")
             this.hasGameStarted = true;
-            localStorage.setItem("room_id", this.roomId);
+
         }
+
     }
 
     ///////////////////////////////////////
@@ -80,7 +94,7 @@ export class GameManager {
     public listen_server_for_messages() {
         if (this.socketManager.wsClient) {
             this.socketManager.wsClient.onmessage = (event) => {
-                const message: SocketServerMessageType = JSON.parse(event.data);
+                const message = JSON.parse(event.data);
                 console.log("Received message from server:", message);
 
                 switch (message.type) {
