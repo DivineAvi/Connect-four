@@ -3,7 +3,7 @@
 //  This file manages the game state and WebSocket connection.
 ///////////////////////////////////////////////////////////////
 
-import type { NewGameServerMessageType, SocketClientMessageType, SocketServerMessageType } from "../types/SocketMessageTypes";
+import type { NewGameServerMessageType, SocketClientMessageType } from "../types/SocketMessageTypes";
 import { SocketManager } from "./SocketManager";
 import { PlayerManager } from "./PlayerManager";
 import type { ColorDiscFunctionType, DiscColorType, OpponentType, RoomIdType } from "../types/GameTypes";
@@ -14,10 +14,10 @@ export class GameManager {
 
     public socketManager: SocketManager;
     public wsUrl: string | null 
-    private static instance: GameManager | null 
+    private static instance: GameManager | null = null 
     public hasGameStarted: boolean = false
     public Player: PlayerManager | null = null
-    private ColorDiscFunction :ColorDiscFunctionType ;
+    public ColorDiscFunction :ColorDiscFunctionType | null = null ;
 
 
 
@@ -25,9 +25,9 @@ export class GameManager {
     // Singleton pattern to ensure only one instance of GameManager exists
     ///////////////////////////////////////
 
-    public static getInstance(wsUrl: string | null = null , ColorDiscFunction : ColorDiscFunctionType) : GameManager {
+    public static getInstance(wsUrl: string | null = null ) : GameManager {
         if (GameManager.instance === null) {
-            GameManager.instance = new GameManager(wsUrl , ColorDiscFunction);
+            GameManager.instance = new GameManager(wsUrl);
         }
         return GameManager.instance;
     }
@@ -37,10 +37,9 @@ export class GameManager {
     // @param wsUrl - The WebSocket server Url
     ///////////////////////////////////////
 
-    constructor(wsUrl: string | null = null , ColorDiscFunction : ColorDiscFunctionType) {
+    constructor(wsUrl: string | null = null ) {
         this.wsUrl = wsUrl;
         this.socketManager = new SocketManager();
-        this.ColorDiscFunction = ColorDiscFunction
     }
 
     public SetUpPlayer(ColorDiscFunction: ColorDiscFunctionType, DiscColor: DiscColorType, Opponent: OpponentType, RoomId: RoomIdType) {
@@ -58,7 +57,7 @@ export class GameManager {
     ///////////////////////////////////////
 
     public async new_game_request_handler(username: string) {
-
+        console.log("new_game_request_handler",username)
         if (!this.socketManager.isConnected) {
             await this.socketManager.connect(this.wsUrl + "?username=" + encodeURIComponent(username));
             this.listen_server_for_messages();
@@ -68,7 +67,7 @@ export class GameManager {
 
             this.socketManager.sendMessage({
                 type: "new_game",
-                socket_id: this.socketManager.socketId,
+                username: username,
             } as SocketClientMessageType);
         }
     }
@@ -78,11 +77,8 @@ export class GameManager {
     ///////////////////////////////////////
 
     public new_game_response_handler(message: NewGameServerMessageType) {
-        if (message.success) {
-            console.log("Success!!")
-            this.hasGameStarted = true;
 
-        }
+            console.log("Room ID : ", message.data.room_id)
 
     }
 
@@ -95,10 +91,9 @@ export class GameManager {
         if (this.socketManager.wsClient) {
             this.socketManager.wsClient.onmessage = (event) => {
                 const message = JSON.parse(event.data);
-                console.log("Received message from server:", message);
-
+ 
                 switch (message.type) {
-                    case "new_game":
+                    case "new_game_response":
                         this.new_game_response_handler(message);
                         break;
                     case "join_game":
@@ -107,6 +102,12 @@ export class GameManager {
                         break;
                     case "game_over":
 
+                        break;
+                    case "error":
+                        console.error("Error:", message.data.error);
+                        break;
+                    case "info":
+                        console.log("Info:", message.data.info);
                         break;
                     case "connection_ack":
                         break;

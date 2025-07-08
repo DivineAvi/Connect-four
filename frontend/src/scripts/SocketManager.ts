@@ -10,7 +10,6 @@ export class SocketManager {
     // Variables
     ///////////////////
     public wsClient: WebSocket | null = null;
-    public socketId: string | null = null;
     public isConnected: Boolean = false;
     ////////////////////////////////////////////
     // Connect to the WebSocket server

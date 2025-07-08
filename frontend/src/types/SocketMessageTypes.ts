@@ -14,7 +14,13 @@ export interface SocketServerMessageType {
 }
 
 export interface NewGameServerMessageType {
-    success: Boolean
-    Opponent: string
-    OpponentType : OpponentType
+    type: "new_game_response"
+    data: {
+        room_id: string;
+        status: string;
+        current_turn: string;
+        total_players: number;
+        players: string[];
+        grid_data: string[][];
+    }
 }

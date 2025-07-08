@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import { GameManager } from "./scripts/GameManager";
 import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
-import type { ColorDiscFunctionType } from "./types/GameTypes";
 export default function App() {
   const [roomId,] = useState<string | null>(null);
-  const [gameStarted,] = useState<boolean>(true);
+  const [gameStarted,] = useState<boolean>(false);
   const [seaching, Setsearching] = useState<Boolean>(false)
-  const gameManager = GameManager.getInstance("ws://localhost:8080/ws" );
+  const gameManager = GameManager.getInstance("ws://localhost:8080/ws");
 
 
   useEffect(() => {
@@ -26,7 +25,7 @@ export default function App() {
 
   return (
     <div>
-      {gameStarted ? <Room getColorDiscFunction={get} /> : <Lobby handleNewGame={handleNewGame} roomId={roomId} searching={seaching} />
+      {gameStarted ? <Room /> : <Lobby handleNewGame={handleNewGame} roomId={roomId} searching={seaching} />
 
       }
     </div>

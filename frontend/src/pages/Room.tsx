@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react"
 import type { ColorDiscFunctionType, DiscColorType } from "../types/GameTypes";
-type RoomPropsType = {
-    getColorDiscFunction: (fn: ColorDiscFunctionType) => void;
-}
 
-export default function Room({ getColorDiscFunction }: RoomPropsType) {
+
+export default function Room() {
 
     const [gridData, setGridData] = useState<Array<Array<DiscColorType>>>(
         Array.from({ length: 7 }, () => Array(6).fill("neutral" as DiscColorType))
@@ -21,9 +19,6 @@ export default function Room({ getColorDiscFunction }: RoomPropsType) {
     function PlaceDisc(cIdx:number,rIdx:number){
         console.log("placing" , cIdx,rIdx)
     }
-    useEffect(() => {
-        getColorDiscFunction(colorDisc);
-    }, [])
     return (
         <div className="w-full min-h-screen bg-black text-black flex flex-col text-white items-center justify-center p-2">
             <div>Opponent</div>
