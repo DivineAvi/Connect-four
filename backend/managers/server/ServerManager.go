@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -50,6 +51,7 @@ func GetServerManager() *ServerManager {
 
 func (sm *ServerManager) StartServer() {
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		println("New connection")
 		username := r.URL.Query().Get("username")
 		if username == "" {
 			http.Error(w, "Username is required", http.StatusBadRequest)
@@ -77,8 +79,6 @@ func (sm *ServerManager) StartServer() {
 ////////////////////////////////////////////////
 
 func NewGameHandler(sm *ServerManager, conn *websocket.Conn, username string) {
-	log.Println("New game request received for ", username)
-
 	//////////////////////////////////////////////////////
 	//MATCHMAKING : CHECKING IF THE USER IS ALREADY IN A GAME
 	//////////////////////////////////////////////////////
@@ -131,22 +131,14 @@ func NewGameHandler(sm *ServerManager, conn *websocket.Conn, username string) {
 	/////////////////////////////
 	// TIMER FOR BOT JOINING
 	/////////////////////////////
-	// go func() {
-	// 	time.Sleep(10 * time.Second)
-	// 	if r.Status == "playing" || r.TotalPlayers == room.PlayersNeeded {
-	// 		return
-	// 	}
-	// 	r.AddPlayer("opponent", conn)
-	// 	r.Status = "playing"
-	// 	r.CurrentTurn = "opponent"
-	// 	r.TotalPlayers = 2
-	// 	conn.WriteJSON(types.SocketServerMessageType{
-	// 		Type: "info_client_about_bot_joining",
-	// 		Data: map[string]any{
-	// 			"info": "Opponent bot has joined the game",
-	// 		},
-	// 	})
-	// }()
+
+	go func() {
+		time.Sleep(10 * time.Second)
+		if r.Status == "playing" || r.TotalPlayers == room.PlayersNeeded {
+			return
+		}
+		r.AddBot()
+	}()
 
 }
 

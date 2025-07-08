@@ -4,10 +4,10 @@ import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
 export default function App() {
   const [roomId,] = useState<string | null>(null);
-  const [gameStarted,] = useState<boolean>(false);
+  const [gameStarted,SetGameStarted] = useState<boolean>(false);
   const [seaching, Setsearching] = useState<Boolean>(false)
   const gameManager = GameManager.getInstance("ws://localhost:8080/ws");
-
+  gameManager.SetGameStarted = SetGameStarted;
 
   useEffect(() => {
 

@@ -11,7 +11,7 @@ export default function Lobby(props: LobbyPropsType) {
                 <label >Username</label>
                 <input name="username" type="text" className=" border-b-1 outline-none p-3 " placeholder="Enter username" />
                 <div className={`${props.roomId ? 'grid-cols-2' : 'grid-cols-1'} grid gap-4 w-fit m-auto`}>
-                    <button onClick={props.handleNewGame} className={`${props.searching?' pointer-events-none ':''} bg-white/4 hover:bg-white/10 p-3 rounded-xl transition-[background] duration-300 cursor-pointer min-w-[88.11px] `}>
+                    <button onClick={props.handleNewGame} className={`${props.searching?' pointer-events-none ':''} bg-white/4 hover:bg-white/10 p-3 active:bg-white/10 rounded-xl transition-[background] duration-300 cursor-pointer min-w-[88.11px] `}>
                         {props.searching ? (
                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto" />
                         ) : props.roomId ? 'New' : 'Play'}

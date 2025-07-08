@@ -14,6 +14,7 @@ import (
 
 type Room struct {
 	ID           string
+	OpponentType string
 	TotalPlayers int
 	Players      map[string]*websocket.Conn // Maps player usernames to their presence in the room
 	CurrentTurn  string                     // Username of the player whose turn it is
@@ -79,9 +80,27 @@ func CreateRoom(username string, conn *websocket.Conn) *Room {
 	return Room
 }
 
+/////////////////////////////////////////////////
+// ADDS A BOT TO THE ROOM
+////////////////////////////////////////////////
+
+func (r *Room) AddBot() {
+	mu.Lock()
+	defer mu.Unlock()
+	println("Adding bot to room", r.ID)
+	r.OpponentType = "bot"
+	r.TotalPlayers++
+	r.Players["bot"] = nil
+	if r.TotalPlayers == PlayersNeeded {
+		println("Total players reached", r.TotalPlayers)
+		go r.ConverToPlaying()
+	}
+
+}
+
 ////////////////////////////////////////////////
 // ADDS A PLAYER TO THE ROOM
-////////////////////////////////////////////////
+///////////////////////////////////////////////
 
 func (r *Room) AddPlayer(username string, conn *websocket.Conn) {
 	mu.Lock()
@@ -89,8 +108,9 @@ func (r *Room) AddPlayer(username string, conn *websocket.Conn) {
 	println("Adding player to room", username)
 	r.Players[username] = conn
 	r.TotalPlayers++
+	r.OpponentType = "human"
 	if r.TotalPlayers == PlayersNeeded {
-		r.ConverToPlaying()
+		go r.ConverToPlaying()
 	}
 }
 
@@ -111,11 +131,15 @@ func (r *Room) StartGame() {
 
 	// Notify all players that the game has started
 	for username, conn := range r.Players {
+		if username == "bot" && r.OpponentType == "bot" {
+			continue
+		}
 		err := conn.WriteJSON(types.SocketServerMessageType{
 			Type: "game_started",
 			Data: map[string]interface{}{
 				"room_id":       r.ID,
 				"status":        r.Status,
+				"opponent_type": r.OpponentType,
 				"current_turn":  r.CurrentTurn,
 				"total_players": r.TotalPlayers,
 				"players":       playerNames,
@@ -206,5 +230,5 @@ func (r *Room) ConverToPlaying() {
 	roomManagerInstance.PlayingRooms[r.ID] = r
 	delete(roomManagerInstance.WaitingRooms, r.ID)
 	println("Starting playing game")
-	r.StartGame()
+	go r.StartGame()
 }

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react"
 import type { ColorDiscFunctionType, DiscColorType } from "../types/GameTypes";
-
+import { GameManager } from "../scripts/GameManager";
 
 export default function Room() {
 
     const [gridData, setGridData] = useState<Array<Array<DiscColorType>>>(
         Array.from({ length: 7 }, () => Array(6).fill("neutral" as DiscColorType))
     )
+    const gameManager = GameManager.getInstance("ws://localhost:8080/ws");
 
     function colorDisc(colIdx: number, rowIdx: number, DiscColor: DiscColorType) {
         setGridData(prevGrid => {
@@ -17,8 +18,11 @@ export default function Room() {
         })
     }
     function PlaceDisc(cIdx:number,rIdx:number){
-        console.log("placing" , cIdx,rIdx)
+        
     }
+    useEffect(() => {
+        gameManager.ColorDiscFunction = colorDisc;
+    }, [])
     return (
         <div className="w-full min-h-screen bg-black text-black flex flex-col text-white items-center justify-center p-2">
             <div>Opponent</div>
