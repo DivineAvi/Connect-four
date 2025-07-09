@@ -34,7 +34,7 @@ Connect-four/
 1. **MATCHMAKING WORKFLOW**
   ![image](https://github.com/user-attachments/assets/9fa4e994-6ea2-43d3-b603-0e5d5dfbcfb0)
 
-2. **NEW CONNECTION WORKFLOW **
+2. **NEW CONNECTION WORKFLOW**
   ![image](https://github.com/user-attachments/assets/c210fd41-54f2-4331-89f8-c2c3c1e0fa06)
 
 ### Backend Setup
@@ -77,7 +77,7 @@ Connect-four/
    Create a `.env` file in `frontend/` with:
 
    ```env
-   VITE_SERVER_URL=http://localhost:8080/api
+   VITE_SERVER_URL=http://localhost:8080
    VITE_WS_URL=ws://localhost:8080
    ```
 
