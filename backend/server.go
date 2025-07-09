@@ -29,7 +29,6 @@ func main() {
 	http.HandleFunc("/api/player", handlePlayer)
 	http.HandleFunc("/api/test/update-stats", handleTestUpdateStats)
 
-	log.Println("Server started on :8080")
 	serverManager.StartServer()
 }
 

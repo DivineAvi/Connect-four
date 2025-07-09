@@ -22,7 +22,6 @@ export default function Lobby(props: LobbyPropsType) {
                 if (gameState.roomId && gameState.username) {
                     setSavedUsername(gameState.username);
                     
-                    // Pre-fill the username input
                     const usernameInput = document.querySelector("input[name='username']") as HTMLInputElement;
                     if (usernameInput) {
                         usernameInput.value = gameState.username;
@@ -89,7 +88,10 @@ export default function Lobby(props: LobbyPropsType) {
                             disabled={props.searching}
                         >
                             {props.searching ? (
+                                <div>
+                                        Searching for a game...
                                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto flex items-center justify-center" >S</div>
+                                </div>
                             ) : 'New Game'}
                         </button>
                     </div>

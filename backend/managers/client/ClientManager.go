@@ -57,7 +57,7 @@ func (cm *ClientManager) RemoveClient(username string, conn *websocket.Conn) {
 	println("Connection ", conn)
 	if username != "" {
 		if conn, exists := cm.clients[username]; exists {
-			println("Deleting Enteries for ", username)
+			println("Deleting Client with its connection ", username)
 			cm.mu.Lock()
 			delete(cm.connToclient, conn)
 			delete(cm.clients, username)
@@ -66,7 +66,7 @@ func (cm *ClientManager) RemoveClient(username string, conn *websocket.Conn) {
 		}
 	} else {
 		if username, exists := cm.connToclient[conn]; exists {
-			println("Deleting Enteries for ", username)
+			println("Deleting Client with its connection ", username)
 			cm.mu.Lock()
 			delete(cm.connToclient, conn)
 			delete(cm.clients, username)

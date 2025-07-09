@@ -43,11 +43,6 @@ var PlayersNeeded int = 2
 
 var mu sync.Mutex
 
-// Initialize random seed for bot moves
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // ////////////////////////////////////////////////
 // SINGLETON INSTACNE OF ROOM MANAGER
 // ////////////////////////////////////////////////
@@ -585,9 +580,8 @@ func (r *Room) DisconnectPlayer(username string) {
 	} else if r.Status == "waiting" {
 		client.GetClientManager().RemovePlayingClient(username)
 		mu.Lock()
-		delete(r.Players, username)
+		r.DeleteRoom()
 		mu.Unlock()
-		r.TotalPlayers--
 	}
 
 }

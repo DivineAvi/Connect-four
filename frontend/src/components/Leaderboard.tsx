@@ -66,7 +66,14 @@ const Leaderboard = ({ isOpen, onClose }: LeaderboardProps) => {
                 ) : players && players.length === 0 ? (
                     <div className="text-gray-400 text-center py-8">No players found. Be the first to join!</div>
                 ) : (
-                    <div className="overflow-x-hidden">
+                    <div
+                        className="overflow-x-hidden max-h-[50vh] overflow-y-scroll"
+                        style={{
+                            WebkitOverflowScrolling: 'touch',
+                            scrollbarWidth: 'thin',
+                            scrollbarColor: '#60a5fa #1e293b4d', // blue-400 and blue-900/30
+                        }}
+                    >
                         {players && players.length > 0 ?(
                         <table className="w-full text-white ">
                             <thead>

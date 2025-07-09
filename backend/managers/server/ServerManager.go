@@ -1,6 +1,7 @@
 package server
 
 import (
+	"backend/config"
 	"backend/managers/client"
 	"backend/managers/room"
 	"backend/managers/socket"
@@ -50,70 +51,80 @@ func GetServerManager() *ServerManager {
 /////////////////////////////////////////////
 
 func (sm *ServerManager) StartServer() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusOK)
-		println("Hello World")
-		w.Write([]byte("Hello World"))
-	})
-	http.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
-		println("Join request received")
-		username := r.URL.Query().Get("username")
-		roomId := r.URL.Query().Get("roomId")
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		if username == "" {
-			http.Error(w, "Username is required", http.StatusBadRequest)
-			return
-		}
-
-		if roomId == "" {
-			http.Error(w, "Room ID is required", http.StatusBadRequest)
-			return
-		}
-
-		roomie := room.GetRoomById(roomId)
-		if roomie == nil {
-			println("Room not found")
-			http.Error(w, "Room not found", http.StatusNotFound)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Room is valid"))
-
-	})
+	serverConfig, err := config.LoadServerConfig()
+	if err != nil {
+		log.Fatalf("Failed to load server config: %v", err)
+	}
+	http.HandleFunc("/join", CheckRoomValidityHandler)
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		println("New connection")
-		username := r.URL.Query().Get("username")
-		if username == "" {
-			http.Error(w, "Username is required", http.StatusBadRequest)
-			return
-		}
+		WebSocketHandler(sm, w, r)
+	})
+	println("Server started on port :", serverConfig.Port)
+	http.ListenAndServe(":"+serverConfig.Port, nil)
+}
 
-		if roomId, b := sm.clientManager.GetPlayingClient(username); b {
-			previousRoom, itexists := sm.roomManager.PlayingRooms[roomId]
-			if itexists {
-				if _, exists := previousRoom.DisconnectedPlayers[username]; !exists {
+// //////////////////////////////////////////////
+// WEBSOCKET HANDLER
+// ///////////////////////////////////////////////
+func WebSocketHandler(sm *ServerManager, w http.ResponseWriter, r *http.Request) {
+	println("New connection")
+	username := r.URL.Query().Get("username")
+	if username == "" {
+		http.Error(w, "Username is required", http.StatusBadRequest)
+		return
+	}
 
-					log.Println("Username in use ❌")
-					http.Error(w, "Username already in use", http.StatusConflict)
-					return
-				}
+	if roomId, b := sm.clientManager.GetPlayingClient(username); b {
+		previousRoom, itexists := sm.roomManager.PlayingRooms[roomId]
+		if itexists {
+			if _, exists := previousRoom.DisconnectedPlayers[username]; !exists {
+
+				log.Println("Username in use ❌")
+				http.Error(w, "Username already in use", http.StatusConflict)
+				return
 			}
 		}
+	}
 
-		conn, _ := sm.socketManager.Upgrade(w, r)
-		sm.clientManager.AddClient(username, conn)
-		println("Client added for handleSocket tracking")
-		go handleSocket(sm, conn)
+	conn, _ := sm.socketManager.Upgrade(w, r)
+	sm.clientManager.AddClient(username, conn)
+	println("Client added for handleSocket tracking")
+	go handleSocket(sm, conn)
 
-	})
+}
 
-	http.ListenAndServe(":8080", nil)
+////////////////////////////////////////////////
+// JOIN HANDLER
+////////////////////////////////////////////////
+
+func CheckRoomValidityHandler(w http.ResponseWriter, r *http.Request) {
+	println("Join request received")
+	username := r.URL.Query().Get("username")
+	roomId := r.URL.Query().Get("roomId")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if username == "" {
+		http.Error(w, "Username is required", http.StatusBadRequest)
+		return
+	}
+
+	if roomId == "" {
+		http.Error(w, "Room ID is required", http.StatusBadRequest)
+		return
+	}
+
+	roomie := room.GetRoomById(roomId)
+	if roomie == nil {
+		println("Room not found")
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Room is valid"))
+
 }
 
 ////////////////////////////////////////////////
