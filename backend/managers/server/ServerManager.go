@@ -50,9 +50,19 @@ func GetServerManager() *ServerManager {
 /////////////////////////////////////////////
 
 func (sm *ServerManager) StartServer() {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		println("Hello World")
+		w.Write([]byte("Hello World"))
+	})
 	http.HandleFunc("/join", func(w http.ResponseWriter, r *http.Request) {
+		println("Join request received")
 		username := r.URL.Query().Get("username")
 		roomId := r.URL.Query().Get("roomId")
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		if username == "" {
 			http.Error(w, "Username is required", http.StatusBadRequest)
 			return
@@ -66,54 +76,15 @@ func (sm *ServerManager) StartServer() {
 
 		roomie := room.GetRoomById(roomId)
 		if roomie == nil {
+			println("Room not found")
 			http.Error(w, "Room not found", http.StatusNotFound)
 			return
 		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("Room is valid"))
 
-		conn, err := sm.socketManager.Upgrade(w, r)
-		if err != nil {
-			http.Error(w, "Failed to upgrade connection", http.StatusInternalServerError)
-			return
-		}
-
-		sm.clientManager.AddClient(username, conn)
-		println("Client added for handleSocket tracking")
-		go handleSocket(sm, conn)
-
-		// Check if the player is rejoining a game
-		_, wasDisconnected := roomie.DisconnectedPlayers[username]
-
-		// If the room is playing and the player was disconnected, handle rejoin
-		if roomie.Status == "playing" && wasDisconnected {
-			println("Player is rejoining a game in progress:", username)
-
-			// Add player back to the room
-			roomie.JoinPlayer(username, conn)
-
-			// Add to playing clients
-			sm.clientManager.AddPlayingClient(username, roomId)
-			return
-		}
-
-		// If the room is playing but player wasn't disconnected, they can't join
-		if roomie.Status == "playing" && !wasDisconnected {
-			http.Error(w, "Game already in progress", http.StatusBadRequest)
-			return
-		}
-
-		// If the room is waiting and not full, player can join
-		if roomie.Status == "waiting" && roomie.TotalPlayers < room.PlayersNeeded {
-			println("Player is joining a waiting room:", username)
-			roomie.AddPlayer(username, conn)
-			sm.clientManager.AddPlayingClient(username, roomId)
-			return
-		}
-
-		// If the room is full
-		if roomie.TotalPlayers == room.PlayersNeeded {
-			http.Error(w, "Room is full", http.StatusBadRequest)
-			return
-		}
 	})
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -124,10 +95,16 @@ func (sm *ServerManager) StartServer() {
 			return
 		}
 
-		if _, b := sm.clientManager.GetClient(username); b {
-			log.Println("Username in use ❌")
-			http.Error(w, "Username already in use", http.StatusConflict)
-			return
+		if roomId, b := sm.clientManager.GetPlayingClient(username); b {
+			previousRoom, itexists := sm.roomManager.PlayingRooms[roomId]
+			if itexists {
+				if _, exists := previousRoom.DisconnectedPlayers[username]; !exists {
+
+					log.Println("Username in use ❌")
+					http.Error(w, "Username already in use", http.StatusConflict)
+					return
+				}
+			}
 		}
 
 		conn, _ := sm.socketManager.Upgrade(w, r)
@@ -150,15 +127,26 @@ func NewGameHandler(sm *ServerManager, conn *websocket.Conn, username string) {
 	//////////////////////////////////////////////////////
 
 	if roomId, exists := sm.clientManager.GetPlayingClient(username); exists {
-		conn.WriteJSON(types.SocketServerMessageType{
-			Type: "info",
-			Data: map[string]any{
-				"info": "Previous game has been terminated",
-			},
-		})
-		sm.clientManager.RemovePlayingClient(username)
-		r := room.GetRoomById(roomId)
-		r.PickWinner()
+		if sm.roomManager.PlayingRooms[roomId] != nil {
+			conn.WriteJSON(types.SocketServerMessageType{
+				Type: "info",
+				Data: map[string]any{
+					"info": "Previous game has been terminated",
+				},
+			})
+			sm.clientManager.RemovePlayingClient(username)
+
+			r := room.GetRoomById(roomId)
+			r.PickWinner()
+		} else {
+			conn.WriteJSON(types.SocketServerMessageType{
+				Type: "info",
+				Data: map[string]any{
+					"info": "Previous game was closed by the server",
+				},
+			})
+		}
+
 	}
 	var r *room.Room
 
@@ -413,7 +401,6 @@ func checkForWin(grid [][]string, color string) string {
 
 func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 	defer func() {
-		println("client disconnected")
 		username, exists := sm.clientManager.GetConnectionToUsername(conn)
 		if !exists {
 			println("Username not found for disconnected client")
@@ -422,17 +409,15 @@ func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 			return
 		}
 
-		println("Client disconnected:", username)
-
 		// Check if the client is in a game
 		if roomId, exists := sm.clientManager.GetPlayingClient(username); exists {
-			println("Player was in a game:", username, "in room:", roomId)
+			println("Client disconnection starting for ", username, " in the room ", roomId)
 
 			// Get the room
 			r := room.GetRoomById(roomId)
 			if r != nil {
 				// Handle player removal (which will trigger the reconnection timer)
-				r.RemovePlayer(username)
+				r.DisconnectPlayer(username)
 			}
 		}
 

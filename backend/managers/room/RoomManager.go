@@ -586,115 +586,53 @@ func (r *Room) checkForWin(grid [][]string, color string) string {
 //REMOVE PLAYER FROM ROOM FUNCTION
 /////////////////////////////////////////////////////
 
-func (r *Room) RemovePlayer(username string) {
-	println("Removing player from room:", username)
+func (r *Room) DisconnectPlayer(username string) {
+	println("Disconnecting player from room:", username)
 
 	if r.Status == "playing" {
 		mu.Lock()
 		// Instead of immediately removing the player, mark them as disconnected
-		if _, exists := r.Players[username]; exists {
-			// Store the disconnection time
-			r.DisconnectedPlayers[username] = time.Now()
 
-			// Remove from active players
-			delete(r.Players, username)
+		// Store the disconnection time
+		r.DisconnectedPlayers[username] = time.Now()
 
-			// Keep a reference to players for notifications
-			players := make(map[string]*websocket.Conn)
-			for playerName, conn := range r.Players {
-				players[playerName] = conn
-			}
-
-			mu.Unlock()
-
-			// Notify remaining players about the disconnection
-			for playerName, conn := range players {
-				if playerName != "bot" {
-					conn.WriteJSON(types.SocketServerMessageType{
-						Type: "player_disconnected",
-						Data: map[string]interface{}{
-							"username": username,
-							"message":  "Player disconnected. They have 30 seconds to reconnect.",
-						},
-					})
-				}
-			}
-
-			// Start a timer to check if the player reconnects within 30 seconds
-			go func(disconnectedUsername string) {
-				time.Sleep(30 * time.Second)
-
-				mu.Lock()
-				defer mu.Unlock()
-
-				// Check if the player is still disconnected
-				if _, stillDisconnected := r.DisconnectedPlayers[disconnectedUsername]; stillDisconnected {
-					println("Player failed to reconnect in time:", disconnectedUsername)
-
-					// Remove from disconnected players
-					delete(r.DisconnectedPlayers, disconnectedUsername)
-
-					// Now decrement the total players
-					r.TotalPlayers--
-
-					// If the game is still active, declare the other player as winner
-					if r.Status == "playing" {
-						// Find the remaining player and declare them the winner
-						var winnerName string
-						var winnerConn *websocket.Conn
-
-						for playerName, conn := range r.Players {
-							if playerName != "bot" {
-								winnerName = playerName
-								winnerConn = conn
-								r.Winner = playerName
-								r.Status = "finished"
-
-								// Update player statistics
-								if playerName != "bot" {
-									go r.UpdatePlayerStats(playerName)
-								}
-								break
-							}
-						}
-
-						// Notify the remaining player outside the lock
-						if winnerConn != nil {
-							mu.Unlock()
-							winnerConn.WriteJSON(types.SocketServerMessageType{
-								Type: "game_update",
-								Data: map[string]interface{}{
-									"room_id": r.ID,
-									"status":  "finished",
-									"winner":  winnerName,
-									"message": "Opponent failed to reconnect in time",
-								},
-							})
-							mu.Lock()
-						}
-
-						// Clean up the room after a delay
-						go func() {
-							time.Sleep(5 * time.Second)
-
-							mu.Lock()
-							playerNames := make([]string, 0, len(r.Players))
-							for playerName := range r.Players {
-								playerNames = append(playerNames, playerName)
-							}
-							mu.Unlock()
-
-							for _, playerName := range playerNames {
-								client.GetClientManager().RemovePlayingClient(playerName)
-							}
-							r.DeleteRoom()
-						}()
-					}
-				}
-			}(username)
-		} else {
-			mu.Unlock()
+		// Keep a reference to players for notifications
+		players := make(map[string]*websocket.Conn)
+		for playerName, conn := range r.Players {
+			players[playerName] = conn
 		}
+
+		mu.Unlock()
+
+		// Notify remaining players about the disconnection
+		for playerName, conn := range players {
+			println("Notifying player ", playerName, " about disconnection of ", username)
+			if playerName != "bot" && playerName != username {
+				conn.WriteJSON(types.SocketServerMessageType{
+					Type: "player_disconnected",
+					Data: map[string]interface{}{
+						"username": username,
+						"message":  "Player disconnected. They have 30 seconds to reconnect.",
+					},
+				})
+			}
+		}
+		println("Players Notified about disconnection of ", username)
+		// Start a timer to check if the player reconnects within 30 seconds
+		go func(disconnectedUsername string) {
+			time.Sleep(30 * time.Second)
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			// Check if the player is still disconnected
+			if _, stillDisconnected := r.DisconnectedPlayers[disconnectedUsername]; stillDisconnected {
+
+				r.PickWinner()
+
+			}
+		}(username)
+
 	} else if r.Status == "waiting" {
 		client.GetClientManager().RemovePlayingClient(username)
 		mu.Lock()
@@ -703,14 +641,6 @@ func (r *Room) RemovePlayer(username string) {
 		r.TotalPlayers--
 	}
 
-	// Only delete the room if all players are gone (both active and disconnected)
-	mu.Lock()
-	activeAndDisconnectedCount := len(r.Players) + len(r.DisconnectedPlayers)
-	mu.Unlock()
-
-	if activeAndDisconnectedCount == 0 {
-		r.DeleteRoom()
-	}
 }
 
 /////////////////////////////////////////////////////
@@ -719,33 +649,47 @@ func (r *Room) RemovePlayer(username string) {
 
 func (r *Room) PickWinner() {
 	println("Picking winner")
-
-	if r.TotalPlayers == 1 {
-		for username := range r.Players {
-			r.Winner = username
-			println("Winner is", r.Winner)
-
-			// Update player statistics
-			if username != "bot" {
-				r.UpdatePlayerStats(username)
-			}
-
-			break
-		}
-	} else if r.TotalPlayers > 1 {
-		// Find a non-bot player to be the winner if possible
-		for username := range r.Players {
-			if username != "bot" {
-				r.Winner = username
-				println("Winner is", r.Winner)
-
-				// Update player statistics
-				r.UpdatePlayerStats(username)
-				break
-			}
-		}
+	if len(r.DisconnectedPlayers) == 2 {
+		println("Both players disconnected")
+		r.DeleteRoom()
+		return
+	}
+	if r.Status == "finished" {
+		return
 	}
 
+	for username := range r.Players {
+		if _, exists := r.DisconnectedPlayers[username]; !exists {
+			r.Winner = username
+			r.Status = "finished"
+			println("Winner is", r.Winner)
+			break
+		}
+	}
+	if r.Winner != "bot" {
+		r.UpdatePlayerStats(r.Winner)
+
+		playerConn := r.Players[r.Winner]
+		playerName := r.Winner
+		updateMsg := types.SocketServerMessageType{
+			Type: "game_update",
+			Data: map[string]any{
+				"room_id":      r.ID,
+				"status":       r.Status,
+				"current_turn": r.CurrentTurn,
+				"grid_data":    r.GridData,
+			},
+		}
+
+		if r.Status == "finished" {
+			updateMsg.Data["winner"] = r.Winner
+		}
+
+		err := playerConn.WriteJSON(updateMsg)
+		if err != nil {
+			println("Error sending game update to", playerName, ":", err.Error())
+		}
+	}
 	r.DeleteRoom()
 }
 
@@ -827,7 +771,20 @@ func (r *Room) UpdatePlayerStats(winner string) {
 
 		if loser != "" && winner != "bot" {
 			println("Updating database with winner:", winner, "and loser:", loser)
-			err := dbInstance.UpdateGameResult(winner, loser)
+
+			// Create player entries if they don't exist
+			_, err := dbInstance.CreateOrUpdatePlayer(winner)
+			if err != nil {
+				log.Printf("Failed to create/update winner entry: %v", err)
+			}
+
+			_, err = dbInstance.CreateOrUpdatePlayer(loser)
+			if err != nil {
+				log.Printf("Failed to create/update loser entry: %v", err)
+			}
+
+			// Update game result
+			err = dbInstance.UpdateGameResult(winner, loser)
 			if err != nil {
 				log.Printf("Failed to update game result: %v", err)
 			} else {
@@ -870,7 +827,20 @@ func (r *Room) UpdatePlayerStats(winner string) {
 
 		if len(humanPlayers) >= 2 {
 			println("Updating draw result for", humanPlayers[0], "and", humanPlayers[1])
-			err := dbInstance.UpdateDraw(humanPlayers[0], humanPlayers[1])
+
+			// Create player entries if they don't exist
+			_, err := dbInstance.CreateOrUpdatePlayer(humanPlayers[0])
+			if err != nil {
+				log.Printf("Failed to create/update first player entry: %v", err)
+			}
+
+			_, err = dbInstance.CreateOrUpdatePlayer(humanPlayers[1])
+			if err != nil {
+				log.Printf("Failed to create/update second player entry: %v", err)
+			}
+
+			// Update draw result
+			err = dbInstance.UpdateDraw(humanPlayers[0], humanPlayers[1])
 			if err != nil {
 				log.Printf("Failed to update draw result: %v", err)
 			} else {

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { GameManager } from "./scripts/GameManager";
 import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
-
+import axios from "axios";
 export default function App() {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [gameStarted, setGameStarted] = useState<boolean>(false);
@@ -10,21 +10,21 @@ export default function App() {
   const [reconnecting, setReconnecting] = useState<boolean>(false);
   const [hasSavedGame, setHasSavedGame] = useState<boolean>(false);
   
-  // Use the correct WebSocket URL
-  const wsUrl = window.location.hostname === 'localhost' 
-    ? "ws://localhost:8080/ws"
-    : `ws://${window.location.hostname}:8080/ws`;
+const serverUrl = import.meta.env.VITE_SERVER_URL;
+  const wsUrl = `${import.meta.env.VITE_WS_URL}/ws`;
     
   const gameManager = GameManager.getInstance(wsUrl);
   gameManager.SetGameStarted = setGameStarted;
   gameManager.SetReconnecting = setReconnecting;
 
   useEffect(() => {
-    // Check if we have a saved game to reconnect to
+    const checkRoomValidity = async () => {
     const savedState = localStorage.getItem('connect4GameState');
     if (savedState) {
       try {
         const gameState = JSON.parse(savedState);
+        const isValid = await axios.get(serverUrl+'/join?roomId='+gameState.roomId+'&username='+gameState.username)
+        if (isValid.status === 200) 
         if (gameState.roomId) {
           setRoomId(gameState.roomId);
           setHasSavedGame(true);
@@ -34,6 +34,8 @@ export default function App() {
         console.error('Failed to parse saved game state', e);
       }
     }
+  }
+    checkRoomValidity();
 
     return () => {
       gameManager.socketManager.disconnect();

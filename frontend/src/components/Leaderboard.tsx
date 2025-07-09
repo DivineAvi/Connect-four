@@ -67,9 +67,9 @@ const Leaderboard = ({ isOpen, onClose }: LeaderboardProps) => {
                 ) : players && players.length === 0 ? (
                     <div className="text-gray-400 text-center py-8">No players found. Be the first to join!</div>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-x-hidden">
                         {players && players.length > 0 ?(
-                        <table className="w-full text-white">
+                        <table className="w-full text-white ">
                             <thead>
                                 <tr className="border-b border-gray-700">
                                     <th className="py-2 px-4 text-left">Rank</th>
