@@ -3,20 +3,181 @@ package main
 import (
 	"backend/db"
 	"backend/managers/server"
-	"os"
-
-	"github.com/joho/godotenv"
+	"encoding/json"
+	"log"
+	"net/http"
+	"strconv"
 )
 
+var database *db.DB
+
 func main() {
-	///////////////////////////////////////////
-	// Load .env file & connect to the database
-	///////////////////////////////////////////
-	godotenv.Load()
-	db.Connect(os.Getenv("DATABASE_URL"))
+	// Initialize database
+	var err error
+	database, err = db.NewDB()
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer database.Close()
 
-	var serverManager = server.GetServerManager()
-	serverManager.StartServer()
+	// Initialize server manager
+	serverManager := server.GetServerManager()
 
-	// Your server code here...
+	// Setup HTTP routes
+	http.HandleFunc("/api/leaderboard", handleLeaderboard)
+	http.HandleFunc("/api/player", handlePlayer)
+	http.HandleFunc("/api/test/update-stats", handleTestUpdateStats) // Add test endpoint
+
+	// Start the server
+	log.Println("Server started on :8080")
+	serverManager.StartServer() // This will set up the WebSocket handler and start the server
+}
+
+// handleLeaderboard handles the leaderboard API endpoint
+func handleLeaderboard(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get limit parameter, default to 10
+	limitStr := r.URL.Query().Get("limit")
+	limit := 10
+	if limitStr != "" {
+		var err error
+		limit, err = strconv.Atoi(limitStr)
+		if err != nil || limit <= 0 {
+			limit = 10
+		}
+	}
+
+	// Get leaderboard
+	players, err := database.GetLeaderboard(limit)
+	if err != nil {
+		log.Printf("Error getting leaderboard: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Set response headers
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Encode and send response
+	if err := json.NewEncoder(w).Encode(players); err != nil {
+		log.Printf("Error encoding response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
+// handlePlayer handles the player API endpoint
+func handlePlayer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get username parameter
+	username := r.URL.Query().Get("username")
+	if username == "" {
+		http.Error(w, "Username parameter is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get player
+	player, err := database.GetPlayerByUsername(username)
+	if err != nil {
+		// If player doesn't exist, create a new one
+		player, err = database.CreateOrUpdatePlayer(username)
+		if err != nil {
+			log.Printf("Error creating player: %v", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Set response headers
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Encode and send response
+	if err := json.NewEncoder(w).Encode(player); err != nil {
+		log.Printf("Error encoding response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+}
+
+// handleTestUpdateStats is a test endpoint to manually update player stats
+func handleTestUpdateStats(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Get winner and loser parameters
+	winner := r.URL.Query().Get("winner")
+	loser := r.URL.Query().Get("loser")
+
+	if winner == "" || loser == "" {
+		http.Error(w, "Winner and loser parameters are required", http.StatusBadRequest)
+		return
+	}
+
+	// Create players if they don't exist
+	_, err := database.CreateOrUpdatePlayer(winner)
+	if err != nil {
+		log.Printf("Error creating winner: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	_, err = database.CreateOrUpdatePlayer(loser)
+	if err != nil {
+		log.Printf("Error creating loser: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Update game result
+	err = database.UpdateGameResult(winner, loser)
+	if err != nil {
+		log.Printf("Error updating game result: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Get updated player data
+	winnerPlayer, err := database.GetPlayerByUsername(winner)
+	if err != nil {
+		log.Printf("Error getting winner: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	loserPlayer, err := database.GetPlayerByUsername(loser)
+	if err != nil {
+		log.Printf("Error getting loser: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Return response with updated player data
+	response := map[string]interface{}{
+		"success": true,
+		"winner":  winnerPlayer,
+		"loser":   loserPlayer,
+	}
+
+	// Set response headers
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	// Encode and send response
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("Error encoding response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
 }

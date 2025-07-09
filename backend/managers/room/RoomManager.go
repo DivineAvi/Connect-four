@@ -3,9 +3,12 @@ package room
 import (
 	"backend/managers/client"
 	"backend/managers/types"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
+
+	"backend/db"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -646,6 +649,11 @@ func (r *Room) RemovePlayer(username string) {
 								winnerConn = conn
 								r.Winner = playerName
 								r.Status = "finished"
+
+								// Update player statistics
+								if playerName != "bot" {
+									go r.UpdatePlayerStats(playerName)
+								}
 								break
 							}
 						}
@@ -714,15 +722,31 @@ func (r *Room) PickWinner() {
 
 	if r.TotalPlayers == 1 {
 		for username := range r.Players {
-
 			r.Winner = username
 			println("Winner is", r.Winner)
+
+			// Update player statistics
+			if username != "bot" {
+				r.UpdatePlayerStats(username)
+			}
+
 			break
+		}
+	} else if r.TotalPlayers > 1 {
+		// Find a non-bot player to be the winner if possible
+		for username := range r.Players {
+			if username != "bot" {
+				r.Winner = username
+				println("Winner is", r.Winner)
+
+				// Update player statistics
+				r.UpdatePlayerStats(username)
+				break
+			}
 		}
 	}
 
 	r.DeleteRoom()
-
 }
 
 ////////////////////////////////////////////////////
@@ -763,4 +787,97 @@ func (r *Room) ConverToPlaying() {
 	mu.Unlock()
 	println("Starting playing game")
 	r.StartGame()
+}
+
+// Add the following function to the RoomManager to update player statistics after a game
+
+// UpdatePlayerStats updates the player statistics in the database after a game
+func (r *Room) UpdatePlayerStats(winner string) {
+	// Import the database package
+	println("Updating player stats for winner:", winner)
+	dbInstance, err := db.NewDB()
+	if err != nil {
+		log.Printf("Failed to connect to database: %v", err)
+		return
+	}
+	defer dbInstance.Close()
+
+	// If there's a winner, update the winner and loser stats
+	if winner != "" {
+		var loser string
+		for playerName := range r.Players {
+			println("Player name:", playerName)
+			if playerName != winner && playerName != "bot" {
+				loser = playerName
+				break
+			}
+		}
+
+		// Also check disconnected players for a potential loser
+		if loser == "" {
+			for playerName := range r.DisconnectedPlayers {
+				if playerName != winner && playerName != "bot" {
+					loser = playerName
+					break
+				}
+			}
+		}
+
+		println("Winner:", winner, "Loser:", loser)
+
+		if loser != "" && winner != "bot" {
+			println("Updating database with winner:", winner, "and loser:", loser)
+			err := dbInstance.UpdateGameResult(winner, loser)
+			if err != nil {
+				log.Printf("Failed to update game result: %v", err)
+			} else {
+				println("Successfully updated game result in database")
+
+				// Verify the update by retrieving the updated player data
+				winnerPlayer, err := dbInstance.GetPlayerByUsername(winner)
+				if err != nil {
+					log.Printf("Failed to retrieve winner data: %v", err)
+				} else {
+					println("Winner stats - Wins:", winnerPlayer.Wins, "Losses:", winnerPlayer.Losses, "Rating:", winnerPlayer.Rating)
+				}
+
+				loserPlayer, err := dbInstance.GetPlayerByUsername(loser)
+				if err != nil {
+					log.Printf("Failed to retrieve loser data: %v", err)
+				} else {
+					println("Loser stats - Wins:", loserPlayer.Wins, "Losses:", loserPlayer.Losses, "Rating:", loserPlayer.Rating)
+				}
+			}
+		} else {
+			println("Cannot update stats: invalid winner or loser")
+			if winner == "bot" {
+				println("Winner is a bot, not updating stats")
+			}
+			if loser == "" {
+				println("No loser found to update stats")
+			}
+		}
+	} else {
+		// If it's a draw, update both players
+		var humanPlayers []string
+		for playerName := range r.Players {
+			if playerName != "bot" {
+				humanPlayers = append(humanPlayers, playerName)
+			}
+		}
+
+		println("Draw detected with", len(humanPlayers), "human players")
+
+		if len(humanPlayers) >= 2 {
+			println("Updating draw result for", humanPlayers[0], "and", humanPlayers[1])
+			err := dbInstance.UpdateDraw(humanPlayers[0], humanPlayers[1])
+			if err != nil {
+				log.Printf("Failed to update draw result: %v", err)
+			} else {
+				println("Successfully updated draw result in database")
+			}
+		} else {
+			println("Not enough human players for a draw update")
+		}
+	}
 }

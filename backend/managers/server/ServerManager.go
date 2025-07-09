@@ -297,8 +297,17 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 
 		// Update game status if there's a winner
 		if winner != "" {
+			println("Game won by", username, "with color", playerColor)
 			r.Status = "finished"
 			r.Winner = username
+
+			// Update player statistics in the database
+			if username != "bot" {
+				println("Calling UpdatePlayerStats for winner:", username)
+				r.UpdatePlayerStats(username)
+			} else {
+				println("Bot won, not updating player stats")
+			}
 		}
 
 		// Notify all players about the update
@@ -489,6 +498,29 @@ func ReconnectHandler(sm *ServerManager, conn *websocket.Conn, username string, 
 			Type: "error",
 			Data: map[string]any{
 				"error": "Room not found",
+			},
+		})
+		return
+	}
+
+	// If the game is already finished, inform the player
+	if r.Status == "finished" {
+		winnerMsg := "The game has ended."
+		if r.Winner != "" {
+			if r.Winner == username {
+				winnerMsg = "You won the game!"
+			} else {
+				winnerMsg = "You lost the game."
+			}
+		}
+
+		conn.WriteJSON(types.SocketServerMessageType{
+			Type: "game_update",
+			Data: map[string]any{
+				"room_id": r.ID,
+				"status":  "finished",
+				"winner":  r.Winner,
+				"message": winnerMsg,
 			},
 		})
 		return
