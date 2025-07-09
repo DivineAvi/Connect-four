@@ -8,6 +8,10 @@ export default function Room() {
         Array.from({ length: 7 }, () => Array(6).fill("neutral" as DiscColorType))
     )
     const [isMyTurn, setIsMyTurn] = useState<boolean>(false);
+    const [statusMessage, setStatusMessage] = useState<string>("");
+    const [reconnecting, setReconnecting] = useState<boolean>(false);
+    const [countdown, setCountdown] = useState<number | undefined>(undefined);
+    
     const gameManager = GameManager.getInstance("ws://localhost:8080/ws");
 
     function colorDisc(colIdx: number, rowIdx: number, DiscColor: DiscColorType) {
@@ -34,13 +38,32 @@ export default function Room() {
             setGridData(typedData);
         };
         gameManager.SetCurrentTurn = setIsMyTurn;
+        gameManager.SetStatusMessage = setStatusMessage;
+        gameManager.SetReconnecting = setReconnecting;
+        gameManager.SetCountdown = setCountdown;
     }, [])
     
     return (
         <div className="w-full min-h-screen bg-black text-black flex flex-col text-white items-center justify-center p-2">
-            <div className="mb-4">
-                {isMyTurn ? "Your Turn" : "Opponent's Turn"}
-            </div>
+            {reconnecting ? (
+                <div className="mb-4 text-yellow-400 font-bold">
+                    Reconnecting to game...
+                </div>
+            ) : (
+                <div className="mb-4">
+                    {isMyTurn ? "Your Turn" : "Opponent's Turn"}
+                </div>
+            )}
+            
+            {statusMessage && (
+                <div className="mb-4 text-blue-400">
+                    {statusMessage}
+                    {countdown !== undefined && (
+                        <span className="ml-2 font-bold">{countdown}s</span>
+                    )}
+                </div>
+            )}
+            
             <div
                 className="grid grid-cols-7 w-fit"
             >
@@ -54,11 +77,11 @@ export default function Room() {
                                     <div
                                         key={rIdx}
                                         onClick={() => {
-                                            if (isPlacableTile && isMyTurn) {
+                                            if (isPlacableTile && isMyTurn && !reconnecting) {
                                                 PlaceDisc(cIdx, rIdx)
                                             }
                                         }}
-                                        className={`${rIdx ? '' : ' border-t '} ${cIdx ? '' : ' border-l '} ${isPlacableTile && isMyTurn ? ' bg-white/10 active:bg-blue-400/20 sm:hover:bg-blue-400/20 ' : ''}` + " w-12 aspect-square flex items-center justify-center border-b border-r border-white/40 p-1"}
+                                        className={`${rIdx ? '' : ' border-t '} ${cIdx ? '' : ' border-l '} ${isPlacableTile && isMyTurn && !reconnecting ? ' bg-white/10 active:bg-blue-400/20 sm:hover:bg-blue-400/20 ' : ''}` + " w-12 aspect-square flex items-center justify-center border-b border-r border-white/40 p-1"}
                                     >
                                         {gridData[cIdx][rIdx] != "neutral" ?
                                             <div className={`${gridData[cIdx][rIdx] == "blue" ? ' bg-blue-400 ' : ' bg-red-400 '} rounded-full w-full h-full flex `}>

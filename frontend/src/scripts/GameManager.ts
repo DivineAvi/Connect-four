@@ -24,13 +24,13 @@ export class GameManager {
     public SetCurrentTurn: (value: boolean) => void = () => { }
     public SetStatusMessage: (message: string) => void = () => { }
     public SetReconnecting: (value: boolean) => void = () => { }
-    public SetCountdown: (value: number | null) => void = () => { }
+    public SetCountdown: (value: number | undefined) => void = () => { }
     
     // Store game state for reconnection
     private lastKnownRoomId: string | null = null;
     private lastKnownUsername: string | null = null;
     private reconnectionTimer: number | null = null;
-    private countdownInterval: number | null = null;
+    private countdownInterval: ReturnType<typeof setInterval> | null = null;
 
     ///////////////////////////////////////
     // Singleton pattern to ensure only one instance of GameManager exists
@@ -233,8 +233,10 @@ export class GameManager {
             this.SetCountdown(countdown);
             
             if (countdown <= 0) {
-                window.clearInterval(this.countdownInterval);
-                this.countdownInterval = null;
+                if (this.countdownInterval !== null) {
+                    window.clearInterval(this.countdownInterval);
+                    this.countdownInterval = null;
+                }
                 this.SetCountdown(undefined);
             }
         }, 1000);
@@ -446,7 +448,9 @@ export class GameManager {
                     
                     // Try to reconnect after a short delay
                     this.reconnectionTimer = window.setTimeout(() => {
-                        this.reconnectToGame(this.Player!.Username, this.Player!.RoomId);
+                        if (this.Player && this.Player.RoomId && this.Player.Username) {
+                            this.reconnectToGame(this.Player.Username, this.Player.RoomId as string);
+                        }
                     }, 2000);
                 }
             };

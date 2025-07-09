@@ -16,16 +16,17 @@ import (
 ////////////////////////////////////
 
 type Room struct {
-	ID           string
-	OpponentType string
-	TotalPlayers int
-	Players      map[string]*websocket.Conn // Maps player usernames to their presence in the room
-	CurrentTurn  string                     // Username of the player whose turn it is
-	GridData     [][]string                 // 2D slice representing the game board
-	Status       string                     // waiting, playing, finished
-	Winner       string
-	Loser        string
-	Draw         bool
+	ID                  string
+	OpponentType        string
+	TotalPlayers        int
+	Players             map[string]*websocket.Conn // Maps player usernames to their presence in the room
+	DisconnectedPlayers map[string]time.Time       // Maps disconnected player usernames to their disconnect time
+	CurrentTurn         string                     // Username of the player whose turn it is
+	GridData            [][]string                 // 2D slice representing the game board
+	Status              string                     // waiting, playing, finished
+	Winner              string
+	Loser               string
+	Draw                bool
 }
 
 type RoomManager struct {
@@ -66,15 +67,16 @@ func GetRoomManager() *RoomManager {
 func CreateRoom(username string, conn *websocket.Conn) *Room {
 	RoomId := uuid.New().String()
 	Room := &Room{
-		ID:           RoomId,
-		GridData:     make([][]string, 7),
-		Players:      make(map[string]*websocket.Conn),
-		Status:       "waiting",
-		CurrentTurn:  username,
-		TotalPlayers: 1,
-		Winner:       "",
-		Loser:        "",
-		Draw:         false,
+		ID:                  RoomId,
+		GridData:            make([][]string, 7),
+		Players:             make(map[string]*websocket.Conn),
+		DisconnectedPlayers: make(map[string]time.Time),
+		Status:              "waiting",
+		CurrentTurn:         username,
+		TotalPlayers:        1,
+		Winner:              "",
+		Loser:               "",
+		Draw:                false,
 	}
 	Room.Players[username] = conn
 	roomManagerInstance.roomIdToRoom[RoomId] = Room
@@ -110,6 +112,152 @@ func (r *Room) AddBot() {
 // JOIN PLAYER TO ROOM
 // JOIN A PLAYER TO THE ROOM
 ///////////////////////////////////////////////
+
+func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
+	println("Player rejoining room:", username)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	// Check if this is a reconnection of a disconnected player
+	if disconnectTime, exists := r.DisconnectedPlayers[username]; exists {
+		// Check if the player is reconnecting within the allowed time (30 seconds)
+		if time.Since(disconnectTime) <= 30*time.Second {
+			// Remove from disconnected players
+			delete(r.DisconnectedPlayers, username)
+
+			// Add back to active players
+			r.Players[username] = conn
+
+			// Send current game state to the reconnected player
+			playerNames := make([]string, 0, len(r.Players))
+			for playerName := range r.Players {
+				playerNames = append(playerNames, playerName)
+			}
+
+			// Determine player colors
+			var playerColor, opponentColor, opponentUsername string
+			if len(playerNames) >= 2 {
+				if r.OpponentType == "bot" {
+					playerColor = "red"
+					opponentColor = "blue"
+					opponentUsername = "bot"
+				} else {
+					// For human vs human, determine colors based on player order
+					if username == playerNames[0] {
+						playerColor = "red"
+						opponentColor = "blue"
+						opponentUsername = playerNames[1]
+					} else {
+						playerColor = "blue"
+						opponentColor = "red"
+						opponentUsername = playerNames[0]
+					}
+				}
+			}
+
+			// Send current game state to the reconnected player
+			conn.WriteJSON(types.SocketServerMessageType{
+				Type: "game_rejoined",
+				Data: map[string]interface{}{
+					"room_id":           r.ID,
+					"status":            r.Status,
+					"opponent_type":     r.OpponentType,
+					"current_turn":      r.CurrentTurn,
+					"total_players":     r.TotalPlayers,
+					"players":           playerNames,
+					"grid_data":         r.GridData,
+					"player_username":   username,
+					"player_color":      playerColor,
+					"opponent_color":    opponentColor,
+					"opponent_username": opponentUsername,
+				},
+			})
+
+			// Notify other players that this player has rejoined
+			for playerName, playerConn := range r.Players {
+				if playerName != username && playerName != "bot" {
+					playerConn.WriteJSON(types.SocketServerMessageType{
+						Type: "player_rejoined",
+						Data: map[string]interface{}{
+							"username": username,
+						},
+					})
+				}
+			}
+
+			println("Player successfully rejoined:", username)
+			return
+		} else {
+			// Time expired, the other player wins
+			println("Rejoin time expired for player:", username)
+
+			// Remove from disconnected players
+			delete(r.DisconnectedPlayers, username)
+
+			// Set the other player as winner
+			for playerName := range r.Players {
+				if playerName != "bot" {
+					r.Winner = playerName
+					r.Status = "finished"
+
+					// Notify the remaining player
+					r.Players[playerName].WriteJSON(types.SocketServerMessageType{
+						Type: "game_update",
+						Data: map[string]interface{}{
+							"room_id": r.ID,
+							"status":  "finished",
+							"winner":  playerName,
+							"message": "Opponent failed to reconnect in time",
+						},
+					})
+					break
+				}
+			}
+
+			// Inform the reconnecting player they were too late
+			conn.WriteJSON(types.SocketServerMessageType{
+				Type: "error",
+				Data: map[string]interface{}{
+					"error": "You failed to reconnect within the time limit. The game is over.",
+				},
+			})
+
+			// Clean up the room after a delay
+			go func() {
+				time.Sleep(5 * time.Second)
+				for playerName := range r.Players {
+					client.GetClientManager().RemovePlayingClient(playerName)
+				}
+				r.DeleteRoom()
+			}()
+
+			return
+		}
+	}
+
+	// This is not a reconnection, treat as a new player
+	r.Players[username] = conn
+	r.TotalPlayers++
+
+	// Send current game state to the new player
+	playerNames := make([]string, 0, len(r.Players))
+	for playerName := range r.Players {
+		playerNames = append(playerNames, playerName)
+	}
+
+	conn.WriteJSON(types.SocketServerMessageType{
+		Type: "game_joined",
+		Data: map[string]interface{}{
+			"room_id":       r.ID,
+			"status":        r.Status,
+			"current_turn":  r.CurrentTurn,
+			"total_players": r.TotalPlayers,
+			"players":       playerNames,
+			"grid_data":     r.GridData,
+		},
+	})
+}
 
 ////////////////////////////////////////////////
 // ADDS A PLAYER TO THE ROOM
@@ -436,13 +584,110 @@ func (r *Room) checkForWin(grid [][]string, color string) string {
 /////////////////////////////////////////////////////
 
 func (r *Room) RemovePlayer(username string) {
+	println("Removing player from room:", username)
 
 	if r.Status == "playing" {
 		mu.Lock()
-		delete(r.Players, username)
-		r.TotalPlayers--
-	}
-	if r.Status == "waiting" {
+		// Instead of immediately removing the player, mark them as disconnected
+		if _, exists := r.Players[username]; exists {
+			// Store the disconnection time
+			r.DisconnectedPlayers[username] = time.Now()
+
+			// Remove from active players
+			delete(r.Players, username)
+
+			// Keep a reference to players for notifications
+			players := make(map[string]*websocket.Conn)
+			for playerName, conn := range r.Players {
+				players[playerName] = conn
+			}
+
+			mu.Unlock()
+
+			// Notify remaining players about the disconnection
+			for playerName, conn := range players {
+				if playerName != "bot" {
+					conn.WriteJSON(types.SocketServerMessageType{
+						Type: "player_disconnected",
+						Data: map[string]interface{}{
+							"username": username,
+							"message":  "Player disconnected. They have 30 seconds to reconnect.",
+						},
+					})
+				}
+			}
+
+			// Start a timer to check if the player reconnects within 30 seconds
+			go func(disconnectedUsername string) {
+				time.Sleep(30 * time.Second)
+
+				mu.Lock()
+				defer mu.Unlock()
+
+				// Check if the player is still disconnected
+				if _, stillDisconnected := r.DisconnectedPlayers[disconnectedUsername]; stillDisconnected {
+					println("Player failed to reconnect in time:", disconnectedUsername)
+
+					// Remove from disconnected players
+					delete(r.DisconnectedPlayers, disconnectedUsername)
+
+					// Now decrement the total players
+					r.TotalPlayers--
+
+					// If the game is still active, declare the other player as winner
+					if r.Status == "playing" {
+						// Find the remaining player and declare them the winner
+						var winnerName string
+						var winnerConn *websocket.Conn
+
+						for playerName, conn := range r.Players {
+							if playerName != "bot" {
+								winnerName = playerName
+								winnerConn = conn
+								r.Winner = playerName
+								r.Status = "finished"
+								break
+							}
+						}
+
+						// Notify the remaining player outside the lock
+						if winnerConn != nil {
+							mu.Unlock()
+							winnerConn.WriteJSON(types.SocketServerMessageType{
+								Type: "game_update",
+								Data: map[string]interface{}{
+									"room_id": r.ID,
+									"status":  "finished",
+									"winner":  winnerName,
+									"message": "Opponent failed to reconnect in time",
+								},
+							})
+							mu.Lock()
+						}
+
+						// Clean up the room after a delay
+						go func() {
+							time.Sleep(5 * time.Second)
+
+							mu.Lock()
+							playerNames := make([]string, 0, len(r.Players))
+							for playerName := range r.Players {
+								playerNames = append(playerNames, playerName)
+							}
+							mu.Unlock()
+
+							for _, playerName := range playerNames {
+								client.GetClientManager().RemovePlayingClient(playerName)
+							}
+							r.DeleteRoom()
+						}()
+					}
+				}
+			}(username)
+		} else {
+			mu.Unlock()
+		}
+	} else if r.Status == "waiting" {
 		client.GetClientManager().RemovePlayingClient(username)
 		mu.Lock()
 		delete(r.Players, username)
@@ -450,10 +695,14 @@ func (r *Room) RemovePlayer(username string) {
 		r.TotalPlayers--
 	}
 
-	if r.TotalPlayers == 0 {
+	// Only delete the room if all players are gone (both active and disconnected)
+	mu.Lock()
+	activeAndDisconnectedCount := len(r.Players) + len(r.DisconnectedPlayers)
+	mu.Unlock()
+
+	if activeAndDisconnectedCount == 0 {
 		r.DeleteRoom()
 	}
-
 }
 
 /////////////////////////////////////////////////////
