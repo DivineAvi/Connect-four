@@ -6,7 +6,7 @@ export default function App() {
   const [roomId,] = useState<string | null>(null);
   const [gameStarted,SetGameStarted] = useState<boolean>(false);
   const [seaching, Setsearching] = useState<Boolean>(false)
-  const gameManager = GameManager.getInstance("ws://localhost:8080/ws");
+  const gameManager = GameManager.getInstance("ws://192.168.1.5:8080/ws");
   gameManager.SetGameStarted = SetGameStarted;
 
   useEffect(() => {

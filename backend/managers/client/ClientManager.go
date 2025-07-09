@@ -41,9 +41,9 @@ func GetClientManager() *ClientManager {
 
 func (cm *ClientManager) AddClient(username string, conn *websocket.Conn) {
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
 	cm.clients[username] = conn
 	cm.connToclient[conn] = username
+	cm.mu.Unlock()
 	println(cm.connToclient[conn], " Added")
 	println(cm.clients[username], " Added")
 }
@@ -54,21 +54,23 @@ func (cm *ClientManager) AddClient(username string, conn *websocket.Conn) {
 ///////////////////////////////
 
 func (cm *ClientManager) RemoveClient(username string, conn *websocket.Conn) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
 	println("Connection ", conn)
 	if username != "" {
 		if conn, exists := cm.clients[username]; exists {
 			println("Deleting Enteries for ", username)
+			cm.mu.Lock()
 			delete(cm.connToclient, conn)
 			delete(cm.clients, username)
+			cm.mu.Unlock()
 			conn.Close()
 		}
 	} else {
 		if username, exists := cm.connToclient[conn]; exists {
 			println("Deleting Enteries for ", username)
+			cm.mu.Lock()
 			delete(cm.connToclient, conn)
 			delete(cm.clients, username)
+			cm.mu.Unlock()
 			conn.Close()
 
 		}
@@ -81,27 +83,24 @@ func (cm *ClientManager) RemoveClient(username string, conn *websocket.Conn) {
 ///////////////////////////////
 
 func (cm *ClientManager) GetClient(username string) (*websocket.Conn, bool) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
+
 	conn, exists := cm.clients[username]
 	return conn, exists
 }
 
 func (cm *ClientManager) GetConnectionToUsername(conn *websocket.Conn) (string, bool) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
+
 	username, exists := cm.connToclient[conn]
 	return username, exists
 }
 
 func (cm *ClientManager) AddPlayingClient(username string, roomId string) {
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
 	if cm.playingClients == nil {
 		cm.playingClients = make(map[string]string)
 	}
-
 	cm.playingClients[username] = roomId
+	cm.mu.Unlock()
 	println("Added playing client:", username)
 }
 
@@ -111,14 +110,14 @@ func (cm *ClientManager) AddPlayingClient(username string, roomId string) {
 ///////////////////////////////
 
 func (cm *ClientManager) RemovePlayingClient(username string) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
+	println("Removing playing client:", username)
 	if cm.playingClients == nil {
 		return
 	}
 	if _, exists := cm.playingClients[username]; exists {
+		cm.mu.Lock()
 		delete(cm.playingClients, username)
-		println("Removed playing client:", username)
+		cm.mu.Unlock()
 	}
 }
 
@@ -128,8 +127,6 @@ func (cm *ClientManager) RemovePlayingClient(username string) {
 ///////////////////////////////
 
 func (cm *ClientManager) GetPlayingClient(username string) (string, bool) {
-	cm.mu.Lock()
-	defer cm.mu.Unlock()
 	if cm.playingClients == nil {
 		return "", false
 	}

@@ -1,14 +1,16 @@
 import type { DiscColorType, OpponentType } from "./GameTypes";
 export interface SocketClientMessageType {
     type: "new_game" | "join_game" | "game_update" | "game_over" | "connection_ack";
-    data?: Map<string, any>;
+    username: string;
+    data: any;
 }
 export interface SocketServerMessageType {
-    type: "new_game" | "join_game" | "game_update" | "game_over" | "connection_ack";
+    type: "new_game" | "join_game" | "game_update" | "game_over" | "connection_ack" | "error" | "info";
     success?: Boolean
     room_id?: string | null;
     socket_id?: string | null;
     player_id?: string | null;
+    data?: any;
 }
 
 export interface NewGameServerMessageType {
@@ -37,5 +39,16 @@ export interface GameStartedServerMessageType {
         total_players: number;
         players: string[];
         grid_data: string[][];
+    }
+}
+
+export interface GameUpdateServerMessageType {
+    type: "game_update"
+    data: {
+        room_id: string;
+        status: string;
+        current_turn: string;
+        grid_data: string[][];
+        winner?: string;
     }
 }
