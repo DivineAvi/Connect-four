@@ -122,23 +122,17 @@ func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	// Check if this is a reconnection of a disconnected player
 	if disconnectTime, exists := r.DisconnectedPlayers[username]; exists {
-		// Check if the player is reconnecting within the allowed time (30 seconds)
 		if time.Since(disconnectTime) <= 30*time.Second {
-			// Remove from disconnected players
 			delete(r.DisconnectedPlayers, username)
 
-			// Add back to active players
 			r.Players[username] = conn
 
-			// Send current game state to the reconnected player
 			playerNames := make([]string, 0, len(r.Players))
 			for playerName := range r.Players {
 				playerNames = append(playerNames, playerName)
 			}
 
-			// Determine player colors
 			var playerColor, opponentColor, opponentUsername string
 			if len(playerNames) >= 2 {
 				if r.OpponentType == "bot" {
@@ -146,7 +140,6 @@ func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
 					opponentColor = "blue"
 					opponentUsername = "bot"
 				} else {
-					// For human vs human, determine colors based on player order
 					if username == playerNames[0] {
 						playerColor = "red"
 						opponentColor = "blue"
@@ -159,7 +152,6 @@ func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
 				}
 			}
 
-			// Send current game state to the reconnected player
 			conn.WriteJSON(types.SocketServerMessageType{
 				Type: "game_rejoined",
 				Data: map[string]interface{}{
@@ -177,7 +169,6 @@ func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
 				},
 			})
 
-			// Notify other players that this player has rejoined
 			for playerName, playerConn := range r.Players {
 				if playerName != username && playerName != "bot" {
 					playerConn.WriteJSON(types.SocketServerMessageType{
@@ -192,19 +183,15 @@ func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
 			println("Player successfully rejoined:", username)
 			return
 		} else {
-			// Time expired, the other player wins
 			println("Rejoin time expired for player:", username)
 
-			// Remove from disconnected players
 			delete(r.DisconnectedPlayers, username)
 
-			// Set the other player as winner
 			for playerName := range r.Players {
 				if playerName != "bot" {
 					r.Winner = playerName
 					r.Status = "finished"
 
-					// Notify the remaining player
 					r.Players[playerName].WriteJSON(types.SocketServerMessageType{
 						Type: "game_update",
 						Data: map[string]interface{}{
@@ -218,7 +205,6 @@ func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
 				}
 			}
 
-			// Inform the reconnecting player they were too late
 			conn.WriteJSON(types.SocketServerMessageType{
 				Type: "error",
 				Data: map[string]interface{}{
@@ -226,7 +212,6 @@ func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
 				},
 			})
 
-			// Clean up the room after a delay
 			go func() {
 				time.Sleep(5 * time.Second)
 				for playerName := range r.Players {
@@ -239,11 +224,9 @@ func (r *Room) JoinPlayer(username string, conn *websocket.Conn) {
 		}
 	}
 
-	// This is not a reconnection, treat as a new player
 	r.Players[username] = conn
 	r.TotalPlayers++
 
-	// Send current game state to the new player
 	playerNames := make([]string, 0, len(r.Players))
 	for playerName := range r.Players {
 		playerNames = append(playerNames, playerName)
@@ -286,18 +269,14 @@ func (r *Room) StartGame() {
 
 	println("Starting game for room", r.ID)
 
-	// Get player usernames for the response
 	playerNames := make([]string, 0, len(r.Players))
 	for username := range r.Players {
 		playerNames = append(playerNames, username)
 	}
 
-	// Assign colors to players
 	var playerColor, botColor string
 
-	// For bot games, assign colors differently
 	if r.OpponentType == "bot" {
-		// Find the human player
 		var humanPlayer string
 		for username := range r.Players {
 			if username != "bot" {
@@ -306,11 +285,9 @@ func (r *Room) StartGame() {
 			}
 		}
 
-		// Assign colors - human player is red, bot is blue
 		playerColor = "red"
 		botColor = "blue"
 
-		// Notify the human player
 		conn := r.Players[humanPlayer]
 		err := conn.WriteJSON(types.SocketServerMessageType{
 			Type: "game_started",
@@ -332,15 +309,11 @@ func (r *Room) StartGame() {
 			println("Error sending game started notification to", humanPlayer, ":", err.Error())
 		}
 	} else {
-		// For human vs human games
 		if len(playerNames) >= 2 {
-			// First player is red, second is blue
 			firstPlayerColor := "red"
 			secondPlayerColor := "blue"
 
-			// Notify all human players
 			for username, conn := range r.Players {
-				// Determine player color and opponent username
 				var playerColor, opponentColor, opponentUsername string
 				if username == playerNames[0] {
 					playerColor = firstPlayerColor
@@ -375,7 +348,6 @@ func (r *Room) StartGame() {
 		}
 	}
 
-	// If bot is in the game and it's the bot's turn, make a move
 	if r.OpponentType == "bot" && r.CurrentTurn == "bot" {
 		go r.MakeBotMove()
 	}
@@ -386,33 +358,24 @@ func (r *Room) StartGame() {
 /////////////////////////////////////////////////////
 
 func (r *Room) MakeBotMove() {
-	// Wait a bit to simulate "thinking"
 	time.Sleep(1 * time.Second)
 
-	// Check if the game is still active
 	if r.Status != "playing" || r.CurrentTurn != "bot" {
 
 		return
 	}
 
-	// Find a valid move
 	column, row := r.findBotMove()
 
-	// Apply the move
-
-	// Double check game is still active
 	if r.Status != "playing" || r.CurrentTurn != "bot" {
 
 		return
 	}
 
-	// Bot always uses blue color
 	botColor := "blue"
 
-	// Update the grid
 	r.GridData[column][row] = botColor
 
-	// Change turn to the player
 	for username := range r.Players {
 		if username != "bot" {
 			r.CurrentTurn = username
@@ -420,16 +383,13 @@ func (r *Room) MakeBotMove() {
 		}
 	}
 
-	// Check for win condition
 	winner := r.checkForWin(r.GridData, botColor)
 
-	// Update game status if there's a winner
 	if winner != "" {
 		r.Status = "finished"
 		r.Winner = "bot"
 	}
 
-	// Notify player about the update
 	for username, conn := range r.Players {
 		if username != "bot" {
 			updateMsg := types.SocketServerMessageType{
@@ -463,13 +423,12 @@ func (r *Room) findBotMove() (int, int) {
 	for col := 0; col < len(r.GridData); col++ {
 		row := r.getLowestEmptyRow(col)
 		if row != -1 {
-			// Try this move
-			r.GridData[col][row] = "blue" // Bot is always blue
+			r.GridData[col][row] = "blue"
 			if r.checkForWin(r.GridData, "blue") != "" {
-				r.GridData[col][row] = "neutral" // Reset
+				r.GridData[col][row] = "neutral"
 				return col, row
 			}
-			r.GridData[col][row] = "neutral" // Reset
+			r.GridData[col][row] = "neutral"
 		}
 	}
 
@@ -477,17 +436,15 @@ func (r *Room) findBotMove() (int, int) {
 	for col := 0; col < len(r.GridData); col++ {
 		row := r.getLowestEmptyRow(col)
 		if row != -1 {
-			// Try this move for the player
-			r.GridData[col][row] = "red" // Player is always red
+			r.GridData[col][row] = "red"
 			if r.checkForWin(r.GridData, "red") != "" {
-				r.GridData[col][row] = "neutral" // Reset
-				return col, row                  // Block this move
+				r.GridData[col][row] = "neutral"
+				return col, row
 			}
-			r.GridData[col][row] = "neutral" // Reset
+			r.GridData[col][row] = "neutral"
 		}
 	}
 
-	// Otherwise, make a random valid move
 	validMoves := []struct {
 		col int
 		row int
@@ -508,7 +465,6 @@ func (r *Room) findBotMove() (int, int) {
 		return randomMove.col, randomMove.row
 	}
 
-	// Fallback (should never happen in a valid game)
 	return 0, 0
 }
 
@@ -517,13 +473,12 @@ func (r *Room) findBotMove() (int, int) {
 /////////////////////////////////////////////////////
 
 func (r *Room) getLowestEmptyRow(col int) int {
-	// Start from the bottom of the column and go up
 	for row := len(r.GridData[col]) - 1; row >= 0; row-- {
 		if r.GridData[col][row] == "neutral" {
 			return row
 		}
 	}
-	return -1 // Column is full
+	return -1
 }
 
 /////////////////////////////////////////////////////
@@ -531,7 +486,7 @@ func (r *Room) getLowestEmptyRow(col int) int {
 /////////////////////////////////////////////////////
 
 func (r *Room) checkForWin(grid [][]string, color string) string {
-	// Check horizontally
+
 	for col := 0; col < len(grid); col++ {
 		for row := 0; row < len(grid[col])-3; row++ {
 			if grid[col][row] == color &&
@@ -543,7 +498,6 @@ func (r *Room) checkForWin(grid [][]string, color string) string {
 		}
 	}
 
-	// Check vertically
 	for col := 0; col < len(grid)-3; col++ {
 		for row := 0; row < len(grid[col]); row++ {
 			if grid[col][row] == color &&
@@ -555,7 +509,6 @@ func (r *Room) checkForWin(grid [][]string, color string) string {
 		}
 	}
 
-	// Check diagonally (down-right)
 	for col := 0; col < len(grid)-3; col++ {
 		for row := 0; row < len(grid[col])-3; row++ {
 			if grid[col][row] == color &&
@@ -567,7 +520,6 @@ func (r *Room) checkForWin(grid [][]string, color string) string {
 		}
 	}
 
-	// Check diagonally (up-right)
 	for col := 0; col < len(grid)-3; col++ {
 		for row := 3; row < len(grid[col]); row++ {
 			if grid[col][row] == color &&
@@ -583,7 +535,7 @@ func (r *Room) checkForWin(grid [][]string, color string) string {
 }
 
 /////////////////////////////////////////////////////
-//REMOVE PLAYER FROM ROOM FUNCTION
+//REMOVE PLAYER FROM ROOM FUNCTION AND NOTIFIES EVERYONE
 /////////////////////////////////////////////////////
 
 func (r *Room) DisconnectPlayer(username string) {
@@ -591,12 +543,9 @@ func (r *Room) DisconnectPlayer(username string) {
 
 	if r.Status == "playing" {
 		mu.Lock()
-		// Instead of immediately removing the player, mark them as disconnected
 
-		// Store the disconnection time
 		r.DisconnectedPlayers[username] = time.Now()
 
-		// Keep a reference to players for notifications
 		players := make(map[string]*websocket.Conn)
 		for playerName, conn := range r.Players {
 			players[playerName] = conn
@@ -733,11 +682,13 @@ func (r *Room) ConverToPlaying() {
 	r.StartGame()
 }
 
-// Add the following function to the RoomManager to update player statistics after a game
+///////////////////////////////////////////
+//UPDATE PLAYER STATS FUNCTION
+//UPDATES THE PLAYER STATS IN THE DATABASE
+///////////////////////////////////////////
 
-// UpdatePlayerStats updates the player statistics in the database after a game
 func (r *Room) UpdatePlayerStats(winner string) {
-	// Import the database package
+
 	println("Updating player stats for winner:", winner)
 	dbInstance, err := db.NewDB()
 	if err != nil {
@@ -746,7 +697,6 @@ func (r *Room) UpdatePlayerStats(winner string) {
 	}
 	defer dbInstance.Close()
 
-	// If there's a winner, update the winner and loser stats
 	if winner != "" {
 		var loser string
 		for playerName := range r.Players {
@@ -757,7 +707,6 @@ func (r *Room) UpdatePlayerStats(winner string) {
 			}
 		}
 
-		// Also check disconnected players for a potential loser
 		if loser == "" {
 			for playerName := range r.DisconnectedPlayers {
 				if playerName != winner && playerName != "bot" {
@@ -772,7 +721,6 @@ func (r *Room) UpdatePlayerStats(winner string) {
 		if loser != "" && winner != "bot" {
 			println("Updating database with winner:", winner, "and loser:", loser)
 
-			// Create player entries if they don't exist
 			_, err := dbInstance.CreateOrUpdatePlayer(winner)
 			if err != nil {
 				log.Printf("Failed to create/update winner entry: %v", err)
@@ -783,14 +731,12 @@ func (r *Room) UpdatePlayerStats(winner string) {
 				log.Printf("Failed to create/update loser entry: %v", err)
 			}
 
-			// Update game result
 			err = dbInstance.UpdateGameResult(winner, loser)
 			if err != nil {
 				log.Printf("Failed to update game result: %v", err)
 			} else {
 				println("Successfully updated game result in database")
 
-				// Verify the update by retrieving the updated player data
 				winnerPlayer, err := dbInstance.GetPlayerByUsername(winner)
 				if err != nil {
 					log.Printf("Failed to retrieve winner data: %v", err)
@@ -815,7 +761,6 @@ func (r *Room) UpdatePlayerStats(winner string) {
 			}
 		}
 	} else {
-		// If it's a draw, update both players
 		var humanPlayers []string
 		for playerName := range r.Players {
 			if playerName != "bot" {
@@ -828,7 +773,6 @@ func (r *Room) UpdatePlayerStats(winner string) {
 		if len(humanPlayers) >= 2 {
 			println("Updating draw result for", humanPlayers[0], "and", humanPlayers[1])
 
-			// Create player entries if they don't exist
 			_, err := dbInstance.CreateOrUpdatePlayer(humanPlayers[0])
 			if err != nil {
 				log.Printf("Failed to create/update first player entry: %v", err)
@@ -839,7 +783,6 @@ func (r *Room) UpdatePlayerStats(winner string) {
 				log.Printf("Failed to create/update second player entry: %v", err)
 			}
 
-			// Update draw result
 			err = dbInstance.UpdateDraw(humanPlayers[0], humanPlayers[1])
 			if err != nil {
 				log.Printf("Failed to update draw result: %v", err)

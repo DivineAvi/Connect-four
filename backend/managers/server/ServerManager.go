@@ -68,7 +68,6 @@ func (sm *ServerManager) StartServer() {
 			return
 		}
 
-		// Check if room exists
 		if roomId == "" {
 			http.Error(w, "Room ID is required", http.StatusBadRequest)
 			return
@@ -217,7 +216,6 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 		return
 	}
 
-	// Get the room
 	r := room.GetRoomById(roomId)
 	if r == nil {
 		conn.WriteJSON(types.SocketServerMessageType{
@@ -229,7 +227,6 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 		return
 	}
 
-	// Check if it's the player's turn
 	if r.CurrentTurn != username {
 		conn.WriteJSON(types.SocketServerMessageType{
 			Type: "error",
@@ -240,7 +237,6 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 		return
 	}
 
-	// Handle the action
 	action, ok := data["action"].(string)
 	if !ok {
 		conn.WriteJSON(types.SocketServerMessageType{
@@ -254,7 +250,6 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 
 	switch action {
 	case "place_disc":
-		// Get column and row
 		column, okCol := data["column"].(float64)
 		row, okRow := data["row"].(float64)
 		playerColor, okColor := data["player_color"].(string)
@@ -269,10 +264,8 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 			return
 		}
 
-		// Update the grid
 		r.GridData[int(column)][int(row)] = playerColor
 
-		// Change turn
 		for playerName := range r.Players {
 			if playerName != username {
 				r.CurrentTurn = playerName
@@ -280,16 +273,13 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 			}
 		}
 
-		// Check for win condition (simplified)
 		winner := checkForWin(r.GridData, playerColor)
 
-		// Update game status if there's a winner
 		if winner != "" {
 			println("Game won by", username, "with color", playerColor)
 			r.Status = "finished"
 			r.Winner = username
 
-			// Update player statistics in the database
 			if username != "bot" {
 				println("Calling UpdatePlayerStats for winner:", username)
 				r.UpdatePlayerStats(username)
@@ -325,9 +315,7 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 			}
 		}
 
-		// If game is over, clean up
 		if r.Status == "finished" {
-			// Wait a bit to ensure messages are sent before cleanup
 			go func() {
 				time.Sleep(5 * time.Second)
 				for playerName := range r.Players {
@@ -336,15 +324,16 @@ func GameUpdateHandler(sm *ServerManager, conn *websocket.Conn, username string,
 				r.DeleteRoom()
 			}()
 		} else if r.OpponentType == "bot" && r.CurrentTurn == "bot" {
-			// If it's the bot's turn, make a move
 			go r.MakeBotMove()
 		}
 	}
 }
 
-// Simple function to check for a win condition
+////////////////////////////////////////////////
+// CHECK FOR WIN CONDITION COPY PASTED FROM ROOM MANAGER
+////////////////////////////////////////////////
+
 func checkForWin(grid [][]string, color string) string {
-	// Check horizontally
 	for col := 0; col < len(grid); col++ {
 		for row := 0; row < len(grid[col])-3; row++ {
 			if grid[col][row] == color &&
@@ -356,7 +345,6 @@ func checkForWin(grid [][]string, color string) string {
 		}
 	}
 
-	// Check vertically
 	for col := 0; col < len(grid)-3; col++ {
 		for row := 0; row < len(grid[col]); row++ {
 			if grid[col][row] == color &&
@@ -368,7 +356,6 @@ func checkForWin(grid [][]string, color string) string {
 		}
 	}
 
-	// Check diagonally (down-right)
 	for col := 0; col < len(grid)-3; col++ {
 		for row := 0; row < len(grid[col])-3; row++ {
 			if grid[col][row] == color &&
@@ -380,7 +367,6 @@ func checkForWin(grid [][]string, color string) string {
 		}
 	}
 
-	// Check diagonally (up-right)
 	for col := 0; col < len(grid)-3; col++ {
 		for row := 3; row < len(grid[col]); row++ {
 			if grid[col][row] == color &&
@@ -409,19 +395,15 @@ func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 			return
 		}
 
-		// Check if the client is in a game
 		if roomId, exists := sm.clientManager.GetPlayingClient(username); exists {
 			println("Client disconnection starting for ", username, " in the room ", roomId)
 
-			// Get the room
 			r := room.GetRoomById(roomId)
 			if r != nil {
-				// Handle player removal (which will trigger the reconnection timer)
 				r.DisconnectPlayer(username)
 			}
 		}
 
-		// Remove client from client manager
 		sm.clientManager.RemoveClient("", conn)
 		conn.Close()
 	}()
@@ -464,7 +446,6 @@ func handleSocket(sm *ServerManager, conn *websocket.Conn) {
 ////////////////////////////////////////////////
 
 func ReconnectHandler(sm *ServerManager, conn *websocket.Conn, username string, data map[string]any) {
-	// Get room ID from the message
 	roomId, ok := data["room_id"].(string)
 	if !ok {
 		conn.WriteJSON(types.SocketServerMessageType{
@@ -476,7 +457,6 @@ func ReconnectHandler(sm *ServerManager, conn *websocket.Conn, username string, 
 		return
 	}
 
-	// Get the room
 	r := room.GetRoomById(roomId)
 	if r == nil {
 		conn.WriteJSON(types.SocketServerMessageType{
@@ -488,7 +468,6 @@ func ReconnectHandler(sm *ServerManager, conn *websocket.Conn, username string, 
 		return
 	}
 
-	// If the game is already finished, inform the player
 	if r.Status == "finished" {
 		winnerMsg := "The game has ended."
 		if r.Winner != "" {
@@ -511,7 +490,6 @@ func ReconnectHandler(sm *ServerManager, conn *websocket.Conn, username string, 
 		return
 	}
 
-	// Check if player was disconnected from this room
 	_, wasDisconnected := r.DisconnectedPlayers[username]
 	if !wasDisconnected {
 		conn.WriteJSON(types.SocketServerMessageType{
@@ -523,9 +501,7 @@ func ReconnectHandler(sm *ServerManager, conn *websocket.Conn, username string, 
 		return
 	}
 
-	// Rejoin the player to the room
 	r.JoinPlayer(username, conn)
 
-	// Add to playing clients
 	sm.clientManager.AddPlayingClient(username, roomId)
 }

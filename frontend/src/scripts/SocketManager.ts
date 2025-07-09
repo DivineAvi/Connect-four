@@ -11,8 +11,6 @@ export class SocketManager {
     ///////////////////
     public wsClient: WebSocket | null = null;
     public isConnected: Boolean = false;
-    private reconnectAttempts: number = 0;
-    private maxReconnectAttempts: number = 5;
     private reconnectTimeout: number | null = null;
     
     ////////////////////////////////////////////
@@ -40,7 +38,6 @@ export class SocketManager {
                 
                 this.wsClient.onopen = () => {
                     this.isConnected = true;
-                    this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
                     console.log("WebSocket connection established");
                     resolve();
                 };

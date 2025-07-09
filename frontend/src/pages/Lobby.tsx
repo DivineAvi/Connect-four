@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { GameManager } from "../scripts/GameManager";
 import Leaderboard from "../components/Leaderboard";
 
 interface LobbyPropsType {
@@ -15,7 +14,6 @@ export default function Lobby(props: LobbyPropsType) {
     const [rejoinLoading, setRejoinLoading] = useState<boolean>(false);
     const [showLeaderboard, setShowLeaderboard] = useState<boolean>(false);
     
-    // Check if there's a saved game to potentially rejoin
     useEffect(() => {
         const savedState = localStorage.getItem('connect4GameState');
         if (savedState) {
@@ -36,7 +34,6 @@ export default function Lobby(props: LobbyPropsType) {
         }
     }, []);
     
-    // Handle rejoin game button click
     const handleRejoinGame = async () => {
         setRejoinLoading(true);
         try {
@@ -52,9 +49,7 @@ export default function Lobby(props: LobbyPropsType) {
     
     return (
         <div className="w-full min-h-screen bg-black text-white flex flex-col">
-            {/* Leaderboard dropdown */}
  
-            {/* Navbar */}
             <div className="w-full bg-black border-b border-blue-500/30 p-4 flex justify-between items-center relative">
                 <h1 className="text-2xl font-bold text-blue-400">Connect Four</h1>
                 <button 
@@ -66,7 +61,6 @@ export default function Lobby(props: LobbyPropsType) {
             </div>
             <Leaderboard isOpen={showLeaderboard} onClose={toggleLeaderboard} />
             
-            {/* Main Content */}
             <div className="flex-1 flex items-center justify-center p-2">
                 <div className="flex flex-col gap-4 w-96 border-2 border-white/9 p-5 rounded-xl">
                     <h1 className="text-2xl font-bold text-center mb-4">Connect Four</h1>

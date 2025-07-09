@@ -26,7 +26,7 @@ export class GameManager {
     public SetReconnecting: (value: boolean) => void = () => { }
     public SetCountdown: (value: number | undefined) => void = () => { }
     
-    // Store game state for reconnection
+    // game state for reconnection
     private lastKnownRoomId: string | null = null;
     private lastKnownUsername: string | null = null;
     private reconnectionTimer: number | null = null;
@@ -52,10 +52,8 @@ export class GameManager {
         this.wsUrl = wsUrl;
         this.socketManager = new SocketManager();
         
-        // Try to load saved game state from localStorage
         this.loadGameState();
         
-        // Setup reconnection handling
         window.addEventListener('online', this.handleReconnection.bind(this));
     }
     
@@ -105,7 +103,6 @@ export class GameManager {
         console.log("Setting up player", ColorDiscFunction, DiscColor, Opponent, RoomId, Username)
         this.Player = new PlayerManager(ColorDiscFunction, DiscColor, Opponent, RoomId, Username)
         
-        // Save game state for potential reconnection
         this.saveGameState();
     }
 
@@ -132,7 +129,6 @@ export class GameManager {
             }
         });
         
-        // Update local state
         this.Player.PlaceDisc(colIdx, rowIdx);
         this.Player.Turn = false;
     }
@@ -162,7 +158,6 @@ export class GameManager {
     // Handle reconnection when connection is lost
     ///////////////////////////////////////
     public handleReconnection(): void {
-        // Clear any existing timers
         if (this.reconnectionTimer !== null) {
             window.clearTimeout(this.reconnectionTimer);
         }
@@ -171,12 +166,10 @@ export class GameManager {
             this.SetCountdown(undefined);
         }
         
-        // If we have a saved game state, try to reconnect
         if (this.lastKnownRoomId && this.lastKnownUsername) {
             this.SetReconnecting(true);
             this.SetStatusMessage("Attempting to reconnect...");
             
-            // Try to reconnect
             this.reconnectToGame(this.lastKnownUsername, this.lastKnownRoomId);
         }
     }
@@ -186,7 +179,6 @@ export class GameManager {
     ///////////////////////////////////////
     public async reconnectToGame(username: string, roomId: string): Promise<void> {
         try {
-            // Connect to the websocket
             if (!this.socketManager.isConnected) {
                 await this.socketManager.connect(this.wsUrl + "?username=" + encodeURIComponent(username));
                 this.listen_server_for_messages();
@@ -195,7 +187,6 @@ export class GameManager {
             if (this.socketManager.isConnected) {
                 console.log("Attempting to reconnect to game...");
                 
-                // Send reconnect message
                 this.socketManager.sendMessage({
                     type: "reconnect",
                     username: username,
@@ -208,7 +199,6 @@ export class GameManager {
             console.error("Failed to reconnect:", error);
             this.SetStatusMessage("Failed to reconnect. Trying again in 5 seconds...");
             
-            // Try again in 5 seconds
             this.reconnectionTimer = window.setTimeout(() => {
                 this.reconnectToGame(username, roomId);
             }, 5000);
@@ -221,10 +211,8 @@ export class GameManager {
     public player_disconnected_handler(message: PlayerDisconnectedMessageType): void {
         console.log("Player disconnected:", message);
         
-        // Show message
         this.SetStatusMessage(message.data.message);
         
-        // Start countdown timer
         let countdown = 30;
         this.SetCountdown(countdown);
         
@@ -248,17 +236,14 @@ export class GameManager {
     public player_rejoined_handler(message: PlayerRejoinedMessageType): void {
         console.log("Player rejoined:", message);
         
-        // Clear countdown
         if (this.countdownInterval !== null) {
             window.clearInterval(this.countdownInterval);
             this.countdownInterval = null;
             this.SetCountdown(undefined);
         }
         
-        // Show message
         this.SetStatusMessage(`${message.data.username} has rejoined the game!`);
         
-        // Clear message after 5 seconds
         setTimeout(() => {
             this.SetStatusMessage("");
         }, 5000);
@@ -273,7 +258,6 @@ export class GameManager {
         this.SetReconnecting(false);
         this.SetGameStarted(true);
         
-        // Set up player
         if (this.ColorDiscFunction) {
             this.SetUpPlayer(
                 this.ColorDiscFunction,
@@ -294,10 +278,8 @@ export class GameManager {
             }
         }
         
-        // Show message
         this.SetStatusMessage("Successfully reconnected to the game!");
         
-        // Clear message after 5 seconds
         setTimeout(() => {
             this.SetStatusMessage("");
         }, 5000);
@@ -345,24 +327,19 @@ export class GameManager {
         console.log("Game update received", message);
         
         if (this.Player) {
-            // Update grid data
             this.SetGridData(message.data.grid_data);
             
-            // Update turn
             const isMyTurn = message.data.current_turn === this.Player.Username;
             this.Player.Turn = isMyTurn;
             this.SetCurrentTurn(isMyTurn);
             
-            // If game is over
             if (message.data.status === "finished") {
-                // Show message if provided
                 if (message.data.message) {
                     alert(message.data.message);
                 } else {
                     alert(message.data.winner === this.Player.Username ? "You won!" : "You lost!");
                 }
                 
-                // Clear saved game state
                 this.clearGameState();
             }
         }
@@ -384,7 +361,6 @@ export class GameManager {
                 alert("You lost!");
             }
             
-            // Clear saved game state
             this.clearGameState();
         }
     }
@@ -437,16 +413,13 @@ export class GameManager {
                 }
             };
             
-            // Handle connection close
             this.socketManager.wsClient.onclose = () => {
                 console.log("WebSocket connection closed");
                 
-                // If we have game state, start reconnection process
                 if (this.Player && this.Player.RoomId && this.Player.Username) {
                     this.SetStatusMessage("Connection lost. Attempting to reconnect...");
                     this.SetReconnecting(true);
                     
-                    // Try to reconnect after a short delay
                     this.reconnectionTimer = window.setTimeout(() => {
                         if (this.Player && this.Player.RoomId && this.Player.Username) {
                             this.reconnectToGame(this.Player.Username, this.Player.RoomId as string);

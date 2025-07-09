@@ -11,8 +11,11 @@ import (
 
 var database *db.DB
 
+///////////////////////////////////////
+//main initializes the database, sets up HTTP routes, and starts the server.
+///////////////////////////////////////
+
 func main() {
-	// Initialize database
 	var err error
 	database, err = db.NewDB()
 	if err != nil {
@@ -20,27 +23,26 @@ func main() {
 	}
 	defer database.Close()
 
-	// Initialize server manager
 	serverManager := server.GetServerManager()
 
-	// Setup HTTP routes
 	http.HandleFunc("/api/leaderboard", handleLeaderboard)
 	http.HandleFunc("/api/player", handlePlayer)
-	http.HandleFunc("/api/test/update-stats", handleTestUpdateStats) // Add test endpoint
+	http.HandleFunc("/api/test/update-stats", handleTestUpdateStats)
 
-	// Start the server
 	log.Println("Server started on :8080")
-	serverManager.StartServer() // This will set up the WebSocket handler and start the server
+	serverManager.StartServer()
 }
 
-// handleLeaderboard handles the leaderboard API endpoint
+// /////////////////////////////////////
+// handleLeaderboard handles the leaderboard API endpoint.
+// /////////////////////////////////////
+
 func handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get limit parameter, default to 10
 	limitStr := r.URL.Query().Get("limit")
 	limit := 10
 	if limitStr != "" {
@@ -51,7 +53,6 @@ func handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get leaderboard
 	players, err := database.GetLeaderboard(limit)
 	if err != nil {
 		log.Printf("Error getting leaderboard: %v", err)
@@ -59,11 +60,9 @@ func handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set response headers
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Encode and send response
 	if err := json.NewEncoder(w).Encode(players); err != nil {
 		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -71,24 +70,24 @@ func handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePlayer handles the player API endpoint
+///////////////////////////////////////
+// handlePlayer handles the player API endpoint.
+///////////////////////////////////////
+
 func handlePlayer(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get username parameter
 	username := r.URL.Query().Get("username")
 	if username == "" {
 		http.Error(w, "Username parameter is required", http.StatusBadRequest)
 		return
 	}
 
-	// Get player
 	player, err := database.GetPlayerByUsername(username)
 	if err != nil {
-		// If player doesn't exist, create a new one
 		player, err = database.CreateOrUpdatePlayer(username)
 		if err != nil {
 			log.Printf("Error creating player: %v", err)
@@ -97,11 +96,9 @@ func handlePlayer(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Set response headers
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Encode and send response
 	if err := json.NewEncoder(w).Encode(player); err != nil {
 		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -109,14 +106,16 @@ func handlePlayer(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleTestUpdateStats is a test endpoint to manually update player stats
+///////////////////////////////////////
+// handleTestUpdateStats is a test endpoint to manually update player stats.
+///////////////////////////////////////
+
 func handleTestUpdateStats(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Get winner and loser parameters
 	winner := r.URL.Query().Get("winner")
 	loser := r.URL.Query().Get("loser")
 
@@ -125,7 +124,6 @@ func handleTestUpdateStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create players if they don't exist
 	_, err := database.CreateOrUpdatePlayer(winner)
 	if err != nil {
 		log.Printf("Error creating winner: %v", err)
@@ -140,7 +138,6 @@ func handleTestUpdateStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update game result
 	err = database.UpdateGameResult(winner, loser)
 	if err != nil {
 		log.Printf("Error updating game result: %v", err)
@@ -148,7 +145,6 @@ func handleTestUpdateStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get updated player data
 	winnerPlayer, err := database.GetPlayerByUsername(winner)
 	if err != nil {
 		log.Printf("Error getting winner: %v", err)
@@ -163,18 +159,15 @@ func handleTestUpdateStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Return response with updated player data
 	response := map[string]interface{}{
 		"success": true,
 		"winner":  winnerPlayer,
 		"loser":   loserPlayer,
 	}
 
-	// Set response headers
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Encode and send response
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

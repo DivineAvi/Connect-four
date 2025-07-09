@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { ColorDiscFunctionType, DiscColorType } from "../types/GameTypes";
+import type { DiscColorType } from "../types/GameTypes";
 import { GameManager } from "../scripts/GameManager";
 
 export default function Room() {
@@ -17,7 +17,7 @@ export default function Room() {
     function colorDisc(colIdx: number, rowIdx: number, DiscColor: DiscColorType) {
         setGridData(prevGrid => {
             const newGrid = prevGrid.map(col => [...col]);
-            newGrid[colIdx][rowIdx] = DiscColor; // or use a variable for player (e.g., 0/1)
+            newGrid[colIdx][rowIdx] = DiscColor; 
             console.log("Disc is placed at", colIdx, rowIdx, "with color", DiscColor);
             return newGrid;
         })

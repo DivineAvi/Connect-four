@@ -28,7 +28,6 @@ const serverUrl = import.meta.env.VITE_SERVER_URL;
         if (gameState.roomId) {
           setRoomId(gameState.roomId);
           setHasSavedGame(true);
-          // Don't set reconnecting to true automatically
         }
       } catch (e) {
         console.error('Failed to parse saved game state', e);
@@ -42,7 +41,6 @@ const serverUrl = import.meta.env.VITE_SERVER_URL;
     };
   }, []);
 
-  // Function to handle reconnect game
   const handleReconnectGame = async () => {
     const savedState = localStorage.getItem('connect4GameState');
     if (!savedState) return;
@@ -57,7 +55,6 @@ const serverUrl = import.meta.env.VITE_SERVER_URL;
       console.error("Failed to reconnect:", error);
       alert("Failed to reconnect to your game. Please try starting a new game.");
       setReconnecting(false);
-      // Clear the saved game state so user can start fresh
       localStorage.removeItem('connect4GameState');
       setHasSavedGame(false);
     }
@@ -71,7 +68,6 @@ const serverUrl = import.meta.env.VITE_SERVER_URL;
     }
     
     try {
-      // Clear any existing saved game
       localStorage.removeItem('connect4GameState');
       setHasSavedGame(false);
       
