@@ -32,7 +32,6 @@ const Leaderboard = ({ isOpen, onClose }: LeaderboardProps) => {
             setLoading(true);
             setError(null);
             
-            // Get the API URL based on the current environment
             const apiUrl = window.location.hostname === 'localhost'
                 ? 'http://localhost:8080/api/leaderboard'
                 : `http://${window.location.hostname}:8080/api/leaderboard`;
