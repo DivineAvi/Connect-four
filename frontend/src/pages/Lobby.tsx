@@ -95,6 +95,8 @@ export default function Lobby(props: LobbyPropsType) {
                             ) : 'New Game'}
                         </button>
                     </div>
+                    <div className="flex justify-center items-center text-white/20 text-sm">Leaderboard won't be counted for bots matches. <br/>
+                    Server used is free tier, so it may be slow.</div>
                 </div>
             </div>
         </div>

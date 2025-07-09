@@ -65,7 +65,7 @@ const Leaderboard = ({ isOpen, onClose }: LeaderboardProps) => {
                     <div className="text-gray-400 text-center py-8">No players found. Be the first to join!</div>
                 ) : (
                     <div
-                        className="overflow-x-hidden max-h-[50vh] overflow-y-scroll"
+                        className="overflow-x-hidden max-h-[50vh] overflow-y-auto"
                         style={{
                             WebkitOverflowScrolling: 'touch',
                             scrollbarWidth: 'thin',
