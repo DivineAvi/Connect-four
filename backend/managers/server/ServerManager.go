@@ -56,12 +56,23 @@ func (sm *ServerManager) StartServer() {
 		log.Fatalf("Failed to load server config: %v", err)
 	}
 	http.HandleFunc("/join", CheckRoomValidityHandler)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.WriteHeader(http.StatusOK)
+		println("Hello World")
+		w.Write([]byte("Hello World"))
+	})
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		WebSocketHandler(sm, w, r)
 	})
-	println("Server started on port :", serverConfig.Port)
-	http.ListenAndServe(":"+serverConfig.Port, nil)
+	port := serverConfig.Port
+	if port == "" {
+		port = "8080" // fallback for local dev
+	}
+	log.Println("Server started on port:", port)
+	http.ListenAndServe(":"+port, nil)
 }
 
 // //////////////////////////////////////////////
