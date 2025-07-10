@@ -398,13 +398,16 @@ func (r *Room) MakeBotMove() {
 			}
 
 			if r.Status == "finished" {
+				client.GetClientManager().RemovePlayingClient(username)
 				updateMsg.Data["winner"] = r.Winner
+				r.DeleteRoom()
 			}
 
 			err := conn.WriteJSON(updateMsg)
 			if err != nil {
 				println("Error sending game update to", username, ":", err.Error())
 			}
+
 		}
 	}
 }
@@ -642,7 +645,7 @@ func (r *Room) PickWinner() {
 ////////////////////////////////////////////////////
 
 func (r *Room) DeleteRoom() {
-
+	println("Deleting room")
 	if r.Status == "waiting" {
 		delete(roomManagerInstance.WaitingRooms, r.ID)
 	} else {

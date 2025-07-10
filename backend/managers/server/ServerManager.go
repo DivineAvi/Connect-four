@@ -60,8 +60,7 @@ func (sm *ServerManager) StartServer() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.WriteHeader(http.StatusOK)
-		println("Hello World")
-		w.Write([]byte("Hello World"))
+		w.Write([]byte("Homepage pinged"))
 	})
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
@@ -85,10 +84,14 @@ func WebSocketHandler(sm *ServerManager, w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Username is required", http.StatusBadRequest)
 		return
 	}
+	if username == "bot" {
+		println("Bot connection")
+		return
+	}
 
 	if roomId, b := sm.clientManager.GetPlayingClient(username); b {
 		previousRoom, itexists := sm.roomManager.PlayingRooms[roomId]
-		if itexists {
+		if itexists && previousRoom.Status == "playing" {
 			if _, exists := previousRoom.DisconnectedPlayers[username]; !exists {
 
 				log.Println("Username in use ❌")
